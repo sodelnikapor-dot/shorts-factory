@@ -7,9 +7,12 @@ import json
 import os
 import random
 import re
+import time
+import urllib.parse
 import urllib.request
 
 POLLINATIONS_TEXT = "https://text.pollinations.ai/openai"
+POLLINATIONS_GET = "https://text.pollinations.ai/{prompt}?model=openai-fast"
 
 ERAS = [
     "Древний Египет", "Древний Рим", "Древняя Греция", "Средневековье",
@@ -99,9 +102,14 @@ def _ask_pollinations(prompt: str) -> str:
     req = urllib.request.Request(
         POLLINATIONS_TEXT, data=body,
         headers={"Content-Type": "application/json", "User-Agent": "shorts-factory/1.0"})
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        data = json.loads(resp.read())
-    return data["choices"][0]["message"]["content"]
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read())
+        return data["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError:
+        url = POLLINATIONS_GET.format(prompt=urllib.parse.quote(prompt))
+        with urllib.request.urlopen(url, timeout=180) as resp:
+            return resp.read().decode("utf-8", errors="replace")
 
 
 def _ask_llm(prompt: str) -> str:
@@ -178,6 +186,7 @@ def generate_script(era: str | None = None) -> dict:
                     break
         except Exception as err:  # noqa: BLE001
             last_err = err
+            time.sleep(15 + 15 * random.random())
     if best is None:
         raise RuntimeError(f"Не удалось получить сценарий: {last_err}")
     print(f"      качество сценария: {best_score:.0%}")
