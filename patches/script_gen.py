@@ -55,7 +55,12 @@ def _extract_json(text: str) -> dict:
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
         raise ValueError(f"JSON не найден в ответе модели: {text[:200]}")
-    return json.loads(match.group(0))
+    data = json.loads(match.group(0))
+    if isinstance(data, str):
+        data = json.loads(data)
+    if not isinstance(data, dict):
+        raise ValueError(f"неожиданный тип ответа: {type(data).__name__}")
+    return data
 
 
 def _ask_gemini(prompt: str) -> str:
@@ -153,7 +158,8 @@ def _words(text: str) -> list[str]:
 
 def _score(script: dict) -> float:
     """0..1: связность (доля служебных слов), конкретика, КАПС-title, длина."""
-    texts = [sc.get("text", "") for sc in script.get("scenes", [])]
+    texts = [sc.get("text", "") if isinstance(sc, dict) else str(sc)
+             for sc in script.get("scenes", [])]
     if not texts:
         return 0.0
     words = _words(" ".join(texts))
@@ -162,13 +168,23 @@ def _score(script: dict) -> float:
     stop_ratio = sum(w in STOPWORDS for w in words) / len(words)
     fluency = min(stop_ratio / 0.32, 1.0)
     concrete = sum(1 for t in texts if re.search(r"\d", t)) / len(texts)
-    title = script.get("title", "")
+    title = str(script.get("title") or "")
     caps = 1.0 if title and title == title.upper() and len(title) <= 90 else 0.0
     length_fit = 1.0 if 100 <= len(words) <= 170 else 0.5
     return 0.4 * fluency + 0.25 * concrete + 0.15 * caps + 0.2 * length_fit
 
 
 def _normalize(script: dict) -> dict:
+    scenes = []
+    for sc in script.get("scenes", []):
+        if isinstance(sc, str):
+            sc = {"text": sc, "image_prompt": ""}
+        if isinstance(sc, dict):
+            scenes.append(sc)
+    script["scenes"] = scenes
+    if not isinstance(script.get("hook"), str):
+        first = scenes[0]["text"] if scenes else ""
+        script["hook"] = first
     for key in ("title", "hook", "description"):
         if isinstance(script.get(key), str):
             script[key] = script[key].replace("\u202f", " ").replace("\u00a0", " ").strip()
