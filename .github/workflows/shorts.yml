@@ -31,6 +31,7 @@ jobs:
         env:
           ERA: ${{ github.event_name == 'workflow_dispatch' && inputs.era || '' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          POLLINATIONS_TOKEN: ${{ secrets.POLLINATIONS_TOKEN }}
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
@@ -46,7 +47,7 @@ jobs:
             MOUNTS="$MOUNTS -v $PWD/patches/images.py:/app/shorts_factory/images.py"
           fi
           docker run --rm -v "$PWD/output:/app/output" $MOUNTS \
-            -e GEMINI_API_KEY -e YT_CLIENT_ID -e YT_CLIENT_SECRET -e YT_REFRESH_TOKEN \
+            -e GEMINI_API_KEY -e POLLINATIONS_TOKEN -e YT_CLIENT_ID -e YT_CLIENT_SECRET -e YT_REFRESH_TOKEN \
             shorts-factory python -m shorts_factory.pipeline /app/output $ARGS
         shell: bash
 
