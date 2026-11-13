@@ -51,6 +51,7 @@ jobs:
         shell: bash
 
       - name: Публикация на YouTube (если ключи настроены)
+        continue-on-error: true
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
@@ -59,21 +60,25 @@ jobs:
           docker run --rm -v "$PWD/output:/app/output" \
             -e YT_CLIENT_ID -e YT_CLIENT_SECRET -e YT_REFRESH_TOKEN \
             shorts-factory python -c "
-          import json, glob
+          import json, glob, os
           from shorts_factory import youtube
-          metas = sorted(glob.glob('/app/output/*/meta.json'))
+          metas = glob.glob('/app/output/meta.json') + glob.glob('/app/output/*/meta.json')
           if not metas:
               raise SystemExit('meta.json не найден')
-          with open(metas[-1], encoding='utf-8') as f:
+          meta_path = max(metas, key=os.path.getmtime)
+          with open(meta_path, encoding='utf-8') as f:
               meta = json.load(f)
           print(json.dumps(youtube.publish(meta), ensure_ascii=False))
           "
 
       - name: Сохранение видео
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: short-${{ github.run_id }}
           path: |
+            output/short.mp4
+            output/meta.json
             output/*/short.mp4
             output/*/meta.json
           retention-days: 14
