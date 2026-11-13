@@ -99,17 +99,28 @@ def _ask_pollinations(prompt: str) -> str:
         "max_tokens": 3000,
         "reasoning_effort": "low",
     }).encode()
-    req = urllib.request.Request(
-        POLLINATIONS_TEXT, data=body,
-        headers={"Content-Type": "application/json", "User-Agent": "shorts-factory/1.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            data = json.loads(resp.read())
-        return data["choices"][0]["message"]["content"]
-    except urllib.error.HTTPError:
-        url = POLLINATIONS_GET.format(prompt=urllib.parse.quote(prompt))
-        with urllib.request.urlopen(url, timeout=180) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+    headers = {"Content-Type": "application/json", "User-Agent": "shorts-factory/1.0"}
+    token = os.environ.get("POLLINATIONS_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    last_err = None
+    for _ in range(4):
+        req = urllib.request.Request(POLLINATIONS_TEXT, data=body, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                data = json.loads(resp.read())
+            return data["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as err:
+            last_err = err
+            if err.code in (402, 429):
+                retry_after = (err.headers or {}).get("Retry-After", "")
+                delay = int(retry_after) + 3 if retry_after.isdigit() else 35
+                time.sleep(delay)
+            else:
+                break
+    url = POLLINATIONS_GET.format(prompt=urllib.parse.quote(prompt))
+    with urllib.request.urlopen(url, timeout=180) as resp:
+        return resp.read().decode("utf-8", errors="replace")
 
 
 def _ask_llm(prompt: str) -> str:
