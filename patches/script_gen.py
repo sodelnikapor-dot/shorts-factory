@@ -8,11 +8,9 @@ import os
 import random
 import re
 import time
-import urllib.parse
 import urllib.request
 
 POLLINATIONS_TEXT = "https://text.pollinations.ai/openai"
-POLLINATIONS_GET = "https://text.pollinations.ai/{prompt}?model=openai-fast"
 
 ERAS = [
     "Древний Египет", "Древний Рим", "Древняя Греция", "Средневековье",
@@ -92,35 +90,37 @@ def _ask_mistral(prompt: str, api_key: str) -> str:
 
 
 def _ask_pollinations(prompt: str) -> str:
+    token = os.environ.get("POLLINATIONS_TOKEN")
+    model = os.environ.get("SHORTS_TEXT_MODEL", "openai" if token else "openai-fast")
     body = json.dumps({
-        "model": os.environ.get("SHORTS_TEXT_MODEL", "openai-fast"),
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "seed": random.randint(0, 10**9),
-        "max_tokens": 3000,
+        "max_tokens": 16000 if token else 3000,
         "reasoning_effort": "low",
     }).encode()
     headers = {"Content-Type": "application/json", "User-Agent": "shorts-factory/1.0"}
-    token = os.environ.get("POLLINATIONS_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
     last_err = None
-    for _ in range(4):
+    for _ in range(8):
         req = urllib.request.Request(POLLINATIONS_TEXT, data=body, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=180) as resp:
+            with urllib.request.urlopen(req, timeout=300) as resp:
                 data = json.loads(resp.read())
             return data["choices"][0]["message"]["content"]
         except urllib.error.HTTPError as err:
             last_err = err
             if err.code in (402, 429):
                 retry_after = (err.headers or {}).get("Retry-After", "")
-                delay = int(retry_after) + 3 if retry_after.isdigit() else 35
+                delay = int(retry_after) + 3 if retry_after.isdigit() else 48
                 time.sleep(delay)
             else:
-                break
-    url = POLLINATIONS_GET.format(prompt=urllib.parse.quote(prompt))
-    with urllib.request.urlopen(url, timeout=180) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+                time.sleep(8)
+        except Exception as err:  # noqa: BLE001
+            last_err = err
+            time.sleep(8)
+    raise last_err
 
 
 def _ask_llm(prompt: str) -> str:
@@ -185,6 +185,7 @@ def generate_script(era: str | None = None) -> dict:
     best: dict | None = None
     best_score = 0.0
     last_err = None
+    started = time.time()
     for _ in range(5):
         try:
             script = _normalize(_extract_json(_ask_llm(prompt)))
@@ -197,7 +198,8 @@ def generate_script(era: str | None = None) -> dict:
                     break
         except Exception as err:  # noqa: BLE001
             last_err = err
-            time.sleep(15 + 15 * random.random())
+        if time.time() - started > 900:
+            break
     if best is None:
         raise RuntimeError(f"Не удалось получить сценарий: {last_err}")
     print(f"      качество сценария: {best_score:.0%}")
