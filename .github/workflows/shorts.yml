@@ -1,0 +1,80 @@
+name: shorts-factory
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      era:
+        description: "Эпоха (пусто = случайная)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shorts
+  cancel-in-progress: false
+
+jobs:
+  make-short:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Сборка образа
+        run: docker build -t shorts-factory .
+
+      - name: Генерация шортса
+        env:
+          ERA: ${{ github.event_name == 'workflow_dispatch' && inputs.era || '' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: |
+          mkdir -p output
+          ARGS=""
+          if [ -n "$ERA" ]; then ARGS="$ERA"; fi
+          MOUNTS=""
+          if [ -f patches/script_gen.py ]; then
+            MOUNTS="$MOUNTS -v $PWD/patches/script_gen.py:/app/shorts_factory/script_gen.py"
+          fi
+          if [ -f patches/images.py ]; then
+            MOUNTS="$MOUNTS -v $PWD/patches/images.py:/app/shorts_factory/images.py"
+          fi
+          docker run --rm -v "$PWD/output:/app/output" $MOUNTS \
+            -e GEMINI_API_KEY -e YT_CLIENT_ID -e YT_CLIENT_SECRET -e YT_REFRESH_TOKEN \
+            shorts-factory python -m shorts_factory.pipeline /app/output $ARGS
+        shell: bash
+
+      - name: Публикация на YouTube (если ключи настроены)
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: |
+          docker run --rm -v "$PWD/output:/app/output" \
+            -e YT_CLIENT_ID -e YT_CLIENT_SECRET -e YT_REFRESH_TOKEN \
+            shorts-factory python -c "
+          import json, glob
+          from shorts_factory import youtube
+          metas = sorted(glob.glob('/app/output/*/meta.json'))
+          if not metas:
+              raise SystemExit('meta.json не найден')
+          with open(metas[-1], encoding='utf-8') as f:
+              meta = json.load(f)
+          print(json.dumps(youtube.publish(meta), ensure_ascii=False))
+          "
+
+      - name: Сохранение видео
+        uses: actions/upload-artifact@v4
+        with:
+          name: short-${{ github.run_id }}
+          path: |
+            output/*/short.mp4
+            output/*/meta.json
+          retention-days: 14
+          if-no-files-found: error
