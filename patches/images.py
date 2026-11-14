@@ -37,8 +37,20 @@ def _cartoonize(img: Image.Image) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
 
 
+def _fallback_image(out_path: str, width: int, height: int) -> str:
+    top, bottom = (24, 28, 48), (10, 10, 20)
+    grad = np.zeros((height, width, 3), dtype=np.float32)
+    for y in range(height):
+        t = y / max(height - 1, 1)
+        grad[y, :] = [t * b + (1 - t) * a for a, b in zip(top, bottom)]
+    img = Image.fromarray(grad.astype(np.uint8))
+    img = img.filter(ImageFilter.GaussianBlur(2))
+    img.save(out_path, quality=92)
+    return out_path
+
+
 def generate_image(prompt: str, out_path: str, width: int = 1080, height: int = 1920,
-                   retries: int = 6) -> str:
+                   retries: int = 9) -> str:
     full = f"{STYLE}, {prompt}"
     url = IMAGE_URL.format(prompt=urllib.parse.quote(full))
     url += (f"?width={width}&height={height}&model=flux&nologo=true"
@@ -64,13 +76,14 @@ def generate_image(prompt: str, out_path: str, width: int = 1080, height: int = 
         except urllib.error.HTTPError as err:
             last_err = err
             if err.code in (402, 429):
-                time.sleep(50)
+                time.sleep(70)
             else:
                 time.sleep(5)
         except Exception as err:  # noqa: BLE001
             last_err = err
             time.sleep(5)
-    raise RuntimeError(f"Не удалось сгенерировать изображение: {last_err}")
+    print(f"!!! изображение не сгенерировано ({last_err}), использую фон-заглушку", flush=True)
+    return _fallback_image(out_path, width, height)
 
 
 if __name__ == "__main__":
