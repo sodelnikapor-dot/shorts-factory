@@ -11,11 +11,11 @@ from PIL import Image
 
 IMAGE_URL = "https://image.pollinations.ai/prompt/{prompt}"
 STYLE = (
-    "vintage historical illustration, detailed copperplate engraving line art "
-    "with ink and watercolor wash, aged parchment texture, sepia and muted "
-    "earth tones, dramatic chiaroscuro lighting, cinematic composition, "
-    "painterly, highly detailed, masterpiece, vertical composition, no text, "
-    "no letters, no watermark"
+    "vintage historical storybook illustration, detailed ink line art with "
+    "rich watercolor painting, warm golden light, bright clear colors, aged "
+    "parchment background, clear readable composition, expressive "
+    "characters, cinematic wide shot, highly detailed, masterpiece, vertical "
+    "composition, no text, no letters, no watermark"
 )
 
 
