@@ -505,8 +505,19 @@ def upload(video_path: str, title: str, description: str, tags: list[str],
         "Authorization": f"Bearer {token}",
         "Content-Type": f"multipart/related; boundary={boundary}",
     })
-    with urllib.request.urlopen(req, timeout=600) as resp:
-        result = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            result = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        # Показываем настоящую причину отказа YouTube API вместо голого кода.
+        err_body = e.read().decode("utf-8", "replace")
+        print(f"[upload] HTTP {e.code}: {err_body[:2000]}", flush=True)
+        if e.code in (500, 503):
+            time.sleep(20)
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                result = json.loads(resp.read())
+        else:
+            raise
     return {"video_id": result["id"], "url": f"https://youtube.com/shorts/{result['id']}"}
 
 
