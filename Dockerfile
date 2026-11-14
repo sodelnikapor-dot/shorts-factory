@@ -521,6 +521,23 @@ def upload(video_path: str, title: str, description: str, tags: list[str],
     return {"video_id": result["id"], "url": f"https://youtube.com/shorts/{result['id']}"}
 
 
+def _channel_info() -> dict:
+    """Диагностика: какой канал используется для публикаций."""
+    try:
+        token = _access_token()
+        req = urllib.request.Request(
+            "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
+            headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            items = json.loads(resp.read()).get("items", [])
+        if not items:
+            return {"channel": "NOT FOUND (токен без канала)"}
+        ch = items[0]
+        return {"channel_id": ch["id"], "channel_title": ch["snippet"]["title"]}
+    except Exception as e:  # диагностика не должна ломать публикацию
+        return {"channel_check_error": str(e)[:200]}
+
+
 def enqueue(meta: dict) -> None:
     """Добавляет видео в очередь публикации (fallback, если ключей YouTube нет)."""
     os.makedirs(os.path.dirname(QUEUE_FILE), exist_ok=True)
@@ -534,9 +551,11 @@ def publish(meta: dict) -> dict:
     if not os.environ.get("YT_REFRESH_TOKEN"):
         enqueue(meta)
         return {"status": "queued", "reason": "YouTube credentials не настроены"}
+    info = _channel_info()
+    print(f"[publish] target channel: {info}", flush=True)
     try:
         result = upload(meta["video"], meta["title"], meta["description"], meta["tags"])
-        return {"status": "published", **result}
+        return {"status": "published", **info, **result}
     except urllib.error.HTTPError as e:
         if e.code != 400:
             raise
