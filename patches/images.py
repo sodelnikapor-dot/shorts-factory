@@ -7,14 +7,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 IMAGE_URL = "https://image.pollinations.ai/prompt/{prompt}"
 STYLE = (
-    "vibrant 2D cartoon illustration, bold clean outlines, expressive "
-    "stylized characters, flat colors with soft cel shading, animated series "
-    "style, bright saturated colors, cinematic composition, highly detailed, "
-    "vertical composition, no text, no letters, no watermark"
+    "flat 2D cartoon animation still frame, cel-shaded, thick black outlines, "
+    "simple bold shapes, flat saturated colors, stylized cartoon characters "
+    "with big expressive eyes and exaggerated features, cartoon background "
+    "art, western animated TV series style, vertical composition, no text, no "
+    "letters, no watermark"
 )
 
 
@@ -22,7 +23,8 @@ def generate_image(prompt: str, out_path: str, width: int = 1080, height: int = 
                    retries: int = 6) -> str:
     full = f"{prompt}, {STYLE}"
     url = IMAGE_URL.format(prompt=urllib.parse.quote(full))
-    url += f"?width={width}&height={height}&model=flux&nologo=true&seed={random.randint(0, 10**9)}"
+    url += (f"?width={width}&height={height}&model=flux&nologo=true"
+            f"&referrer=shortsfactory&seed={random.randint(0, 10**9)}")
     last_err = None
     for attempt in range(retries):
         try:
@@ -34,6 +36,9 @@ def generate_image(prompt: str, out_path: str, width: int = 1080, height: int = 
             img = Image.open(io.BytesIO(data)).convert("RGB")
             w, h = img.size
             img = img.crop((int(w * 0.04), int(h * 0.04), int(w * 0.96), int(h * 0.92)))
+            if img.size != (width, height):
+                img = img.resize((width, height), Image.LANCZOS)
+                img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=140, threshold=2))
             img.save(out_path, quality=92)
             time.sleep(46)
             return out_path
@@ -51,6 +56,7 @@ def generate_image(prompt: str, out_path: str, width: int = 1080, height: int = 
 
 if __name__ == "__main__":
     print(generate_image(
-        "ancient roman legionary standing on a battlefield at dusk",
+        "cartoon boy peeking out from under a blanket in a dark bedroom, "
+        "shadowy figure in the doorway",
         "test_image.jpg",
     ))
