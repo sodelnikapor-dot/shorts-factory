@@ -175,11 +175,19 @@ def _score(script: dict) -> float:
 
 
 def _normalize(script: dict) -> dict:
+    topic = str(script.get("topic") or script.get("title") or "historical scene")
     scenes = []
     for sc in script.get("scenes", []):
         if isinstance(sc, str):
             sc = {"text": sc, "image_prompt": ""}
         if isinstance(sc, dict):
+            sc = dict(sc)
+            for key in ("text", "image_prompt"):
+                if not isinstance(sc.get(key), str):
+                    sc[key] = str(sc.get(key) or "")
+            if not sc["image_prompt"].strip():
+                base = sc["text"].strip() or topic
+                sc["image_prompt"] = " ".join(base.split()[:12]) or topic
             scenes.append(sc)
     script["scenes"] = scenes
     if not isinstance(script.get("hook"), str):
