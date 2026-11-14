@@ -2,7 +2,7 @@ name: shorts-factory
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 3,7,10,14,18 * * *"
   workflow_dispatch:
     inputs:
       era:
@@ -39,6 +39,15 @@ jobs:
           mkdir -p output
           ARGS=""
           if [ -n "$ERA" ]; then ARGS="$ERA"; fi
+          HOUR=$(date -u +%H)
+          case $HOUR in
+            0|1|2|3) SLOT=0;;
+            4|5|6|7) SLOT=1;;
+            8|9|10|11) SLOT=2;;
+            12|13|14|15) SLOT=3;;
+            *) SLOT=4;;
+          esac
+          export SHORTS_SLOT=$SLOT
           MOUNTS=""
           if [ -f patches/script_gen.py ]; then
             MOUNTS="$MOUNTS -v $PWD/patches/script_gen.py:/app/shorts_factory/script_gen.py"
@@ -53,7 +62,7 @@ jobs:
             MOUNTS="$MOUNTS -v $PWD/patches/video.py:/app/shorts_factory/video.py"
           fi
           docker run --rm -v "$PWD/output:/app/output" $MOUNTS \
-            -e GEMINI_API_KEY -e POLLINATIONS_TOKEN -e YT_CLIENT_ID -e YT_CLIENT_SECRET -e YT_REFRESH_TOKEN \
+            -e GEMINI_API_KEY -e POLLINATIONS_TOKEN -e SHORTS_SLOT             -e YT_CLIENT_ID -e YT_CLIENT_SECRET -e YT_REFRESH_TOKEN \
             shorts-factory python -m shorts_factory.pipeline /app/output $ARGS
         shell: bash
 
