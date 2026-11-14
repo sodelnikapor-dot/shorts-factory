@@ -11,11 +11,10 @@ from PIL import Image
 
 IMAGE_URL = "https://image.pollinations.ai/prompt/{prompt}"
 STYLE = (
-    "vintage historical storybook illustration, detailed ink line art with "
-    "rich watercolor painting, warm golden light, bright clear colors, aged "
-    "parchment background, clear readable composition, expressive "
-    "characters, cinematic wide shot, highly detailed, masterpiece, vertical "
-    "composition, no text, no letters, no watermark"
+    "vibrant 2D cartoon illustration, bold clean outlines, expressive "
+    "stylized characters, flat colors with soft cel shading, animated series "
+    "style, bright saturated colors, cinematic composition, highly detailed, "
+    "vertical composition, no text, no letters, no watermark"
 )
 
 
