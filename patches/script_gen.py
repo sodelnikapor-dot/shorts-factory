@@ -398,3 +398,5 @@ if __name__ == "__main__":
     s = generate_script()
     print(s["title"])
     print(len(s["scenes"]), "сцен")
+
+# внеочередной выпуск по запросу
