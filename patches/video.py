@@ -33,17 +33,23 @@ def _ensure_font() -> str:
 
 
 def _subtitle_png(text: str, width: int = 980, font_size: int = 92) -> str:
-    """Простой жирный текст без обводки на прозрачном фоне, по центру строки."""
+    """Простой жирный текст без обводки; ключевые слова КАПСОМ выделяются жёлтым."""
     font = ImageFont.truetype(_ensure_font(), font_size)
-    words = text.split()
-    lines, line = [], ""
-    for word in words:
-        candidate = f"{line} {word}".strip()
-        if font.getlength(candidate) <= width or not line:
-            line = candidate
-        else:
+
+    def word_color(word: str):
+        core = word.strip(".,!?…:;«»()\"'")
+        return (255, 214, 0, 255) if len(core) > 1 and core.isupper() else (255, 255, 255, 255)
+
+    lines, line, line_w = [], [], 0.0
+    space_w = font.getlength(" ")
+    for word in text.split():
+        w = font.getlength(word)
+        if line and line_w + space_w + w > width:
             lines.append(line)
-            line = word
+            line, line_w = [word], w
+        else:
+            line.append(word)
+            line_w += (space_w if line_w else 0) + w
     if line:
         lines.append(line)
 
@@ -51,9 +57,12 @@ def _subtitle_png(text: str, width: int = 980, font_size: int = 92) -> str:
     img = Image.new("RGBA", (width + 60, line_h * len(lines) + 20), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     y = 10
-    for ln in lines:
-        x = (img.width - font.getlength(ln)) / 2
-        draw.text((x, y), ln, font=font, fill=(255, 255, 255, 255))
+    for words in lines:
+        total = sum(font.getlength(wd) for wd in words) + space_w * (len(words) - 1)
+        x = (img.width - total) / 2
+        for wd in words:
+            draw.text((x, y), wd, font=font, fill=word_color(wd))
+            x += font.getlength(wd) + space_w
         y += line_h
     path = os.path.join(ASSETS, f"sub_{abs(hash(text)) % 10**10}.png")
     img.save(path)
@@ -242,8 +251,10 @@ def make_video(scenes: list[dict], audio_files: list[str], subtitle_tracks: list
             ph, pw = plate.shape[:2]
             pad = np.zeros((ph + 200, pw + 200, 3), dtype=np.float32)
             pad[100:100 + ph, 100:100 + pw] = plate
-            shots.append(_kb_clip(pad, d1, 1.00, 1.05, 20 * zoom_dir))
-            shots.append(_kb_clip(pad, d2, 1.09, 1.15, -18 * zoom_dir))
+            shots.append(_kb_clip(pad, d1, 1.06 if i == 0 else 1.00, 1.12 if i == 0 else 1.05,
+                                  20 * zoom_dir))
+            shots.append(_kb_clip(pad, d2, 1.15 if i == 0 else 1.09, 1.20 if i == 0 else 1.15,
+                                  -18 * zoom_dir))
         for shot in shots:
             scene_clips.append(shot.with_start(cursor))
             cursor += shot.duration
