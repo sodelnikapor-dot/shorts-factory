@@ -518,7 +518,10 @@ def upload(video_path: str, title: str, description: str, tags: list[str],
                 result = json.loads(resp.read())
         else:
             raise
-    return {"video_id": result["id"], "url": f"https://youtube.com/shorts/{result['id']}"}
+    snip = result.get("snippet", {})
+    print(f"[upload] загружено на канал {snip.get('channelId')} «{snip.get('channelTitle')}»", flush=True)
+    return {"video_id": result["id"], "url": f"https://youtube.com/shorts/{result['id']}",
+            "channel_id": snip.get("channelId"), "channel_title": snip.get("channelTitle")}
 
 
 def _channel_info() -> dict:
