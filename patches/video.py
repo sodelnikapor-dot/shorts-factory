@@ -1,13 +1,12 @@
 """
 Сборка вертикального видео 1080x1920 в стиле Кубыча: сильная Ken Burns анимация,
-pop-субтитры по центру, процедурная кинематографичная фоновая музыка, озвучка.
+pop-субтитры по центру, чистая озвучка без фоновой музыки.
 """
 import os
 import urllib.request
-import wave
 
 import numpy as np
-from moviepy import (AudioFileClip, CompositeAudioClip, CompositeVideoClip, ImageClip,
+from moviepy import (AudioFileClip, CompositeVideoClip, ImageClip,
                      VideoClip, concatenate_audioclips)
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -117,43 +116,6 @@ def _scene_clip(image_path: str, duration: float, zoom_dir: int) -> VideoClip:
     return VideoClip(make, duration=duration).with_fps(FPS)
 
 
-def _make_music(duration: float, wav_path: str) -> str:
-    """Процедурный напряжённый кинематографичный эмбиент: низкий дрон + пульс + воздух."""
-    sr = 22050
-    n = int(duration * sr) + sr
-    t = np.arange(n) / sr
-    rng = np.random.default_rng(42)
-
-    drone = (0.50 * np.sin(2 * np.pi * 55.0 * t)
-             + 0.30 * np.sin(2 * np.pi * 82.5 * t + 0.5)
-             + 0.22 * np.sin(2 * np.pi * 110.0 * t + 1.1))
-    lfo = 0.65 + 0.35 * np.sin(2 * np.pi * t / 17.0)
-    audio = drone * lfo
-
-    pulse_phase = (t / 2.4) % 1.0
-    thump = np.exp(-pulse_phase * 8) * np.sin(2 * np.pi * 48.0 * t) * 0.55
-    audio += thump
-
-    noise = rng.normal(0, 1, n)
-    kernel = np.hanning(201)
-    kernel /= kernel.sum()
-    audio += np.convolve(noise, kernel, mode="same") * 0.05
-
-    fade = int(2.0 * sr)
-    env = np.ones(n)
-    env[:fade] = np.linspace(0, 1, fade)
-    env[-fade:] = np.linspace(1, 0, fade)
-    audio *= env
-    audio = np.clip(audio, -1, 1)
-    pcm = (audio * 32767 * 0.9).astype(np.int16)
-    with wave.open(wav_path, "wb") as f:
-        f.setnchannels(1)
-        f.setsampwidth(2)
-        f.setframerate(sr)
-        f.writeframes(pcm.tobytes())
-    return wav_path
-
-
 def make_video(scenes: list[dict], audio_files: list[str], subtitle_tracks: list[list[dict]],
                out_path: str) -> str:
     """scenes: [{'image': путь}], audio_files: mp3 по сценам, subtitle_tracks: тайминги относительно начала сцены."""
@@ -190,10 +152,7 @@ def make_video(scenes: list[dict], audio_files: list[str], subtitle_tracks: list
         video = CompositeVideoClip([video, *overlay_clips], size=(W, H)).with_duration(cursor)
 
     voice = concatenate_audioclips([AudioFileClip(a) for a in audio_files])
-    work_dir = os.path.dirname(os.path.abspath(out_path))
-    music = AudioFileClip(_make_music(cursor, os.path.join(work_dir, "ambient.wav")))
-    music = music.with_duration(cursor).with_volume_scaled(0.10)
-    video = video.with_audio(CompositeAudioClip([voice, music]))
+    video = video.with_audio(voice)
 
     video.write_videofile(out_path, fps=FPS, codec="libx264", audio_codec="aac",
                           preset="medium", ffmpeg_params=["-crf", "21"], logger=None)
