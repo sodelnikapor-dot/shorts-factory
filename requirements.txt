@@ -1,0 +1,6 @@
+edge-tts>=7.0
+moviepy>=2.0
+pillow>=10.0
+numpy
+requests
+opencv-python-headless>=4.9
