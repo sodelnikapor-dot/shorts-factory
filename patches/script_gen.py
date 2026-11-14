@@ -373,7 +373,24 @@ def generate_script(era: str | None = None) -> dict:
         script = copy.deepcopy(SCRIPTS[(day * 5 + int(slot)) % len(SCRIPTS)])
     else:
         script = copy.deepcopy(random.choice(pool or SCRIPTS))
-    script.setdefault("tags", ["#shorts", "#история", "#факты", "#историческиефакты", script["era"].lower()])
+    script.setdefault("tags", [
+        "#shorts", "#shortsfeed", "#shortsyoutube", "#рекомендации",
+        "#история", "#факты", "#историческиефакты", "#интересныефакты",
+        "#знания", "#интересное", "#топ", "#фактыистории",
+        "#наука", "#образование", "#подпишись",
+        script["era"].lower(),
+    ])
+    # Видимые хэштеги — в описании (первые 3 YouTube показывает над заголовком).
+    # Не больше 15, иначе YouTube игнорирует их все.
+    hashtags = [
+        "#shorts", "#факты", "#история", "#рекомендации", "#интересное",
+        "#историческиефакты", "#знания", "#интересныефакты", "#топ",
+        "#shortsfeed", "#фактыистории", "#подпишись",
+    ]
+    desc = script.get("description", "").strip()
+    if "#shorts" not in desc:
+        desc = (desc + "\n\n" + " ".join(hashtags)).strip()
+        script["description"] = desc
     return script
 
 
