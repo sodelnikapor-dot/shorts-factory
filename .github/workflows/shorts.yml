@@ -74,6 +74,9 @@ jobs:
         shell: bash
 
       - name: Публикация на YouTube (если ключи настроены)
+        # На push-сборках (валидация) не публикуем — чтобы не расходовать
+        # дневной лимит загрузок канала. Публикуют только schedule и ручной запуск.
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         continue-on-error: true
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
