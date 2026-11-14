@@ -7,6 +7,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import cv2
+import numpy as np
 from PIL import Image, ImageFilter
 
 IMAGE_URL = "https://image.pollinations.ai/prompt/{prompt}"
@@ -19,9 +21,25 @@ STYLE = (
 )
 
 
+def _cartoonize(img: Image.Image) -> Image.Image:
+    bgr = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
+    bgr = cv2.edgePreservingFilter(bgr, flags=1, sigma_s=60, sigma_r=0.4)
+    styl = cv2.stylization(bgr, sigma_s=50, sigma_r=0.4)
+    quant = (np.round(styl / 36) * 36).astype(np.uint8)
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    edges = cv2.Canny(gray, 60, 140)
+    edges = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
+    edges = cv2.medianBlur(edges, 3)
+    dark = np.clip((255 - edges.astype(np.float32)) / 255.0, 0.15, 1.0)[..., None]
+    out = (quant.astype(np.float32) * dark).clip(0, 255).astype(np.uint8)
+    out = cv2.bilateralFilter(out, 7, 100, 100)
+    return Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
+
+
 def generate_image(prompt: str, out_path: str, width: int = 1080, height: int = 1920,
                    retries: int = 6) -> str:
-    full = f"{prompt}, {STYLE}"
+    full = f"{STYLE}, {prompt}"
     url = IMAGE_URL.format(prompt=urllib.parse.quote(full))
     url += (f"?width={width}&height={height}&model=flux&nologo=true"
             f"&referrer=shortsfactory&seed={random.randint(0, 10**9)}")
@@ -39,6 +57,7 @@ def generate_image(prompt: str, out_path: str, width: int = 1080, height: int = 
             if img.size != (width, height):
                 img = img.resize((width, height), Image.LANCZOS)
                 img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=140, threshold=2))
+            img = _cartoonize(img)
             img.save(out_path, quality=92)
             time.sleep(46)
             return out_path
