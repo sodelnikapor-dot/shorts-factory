@@ -23,17 +23,17 @@ STYLE = (
 
 def _cartoonize(img: Image.Image) -> Image.Image:
     bgr = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
-    bgr = cv2.edgePreservingFilter(bgr, flags=1, sigma_s=60, sigma_r=0.4)
-    styl = cv2.stylization(bgr, sigma_s=50, sigma_r=0.4)
-    quant = (np.round(styl / 36) * 36).astype(np.uint8)
+    bgr = cv2.edgePreservingFilter(bgr, flags=1, sigma_s=60, sigma_r=0.35)
+    styl = cv2.stylization(bgr, sigma_s=60, sigma_r=0.35)
+    quant = (np.round(styl / 48) * 48).astype(np.uint8)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (3, 3), 0)
-    edges = cv2.Canny(gray, 60, 140)
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(gray, 40, 110)
     edges = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
-    edges = cv2.medianBlur(edges, 3)
-    dark = np.clip((255 - edges.astype(np.float32)) / 255.0, 0.15, 1.0)[..., None]
+    edges = cv2.GaussianBlur(edges, (5, 5), 0)
+    dark = np.clip((255 - edges.astype(np.float32)) / 255.0, 0.45, 1.0)[..., None]
     out = (quant.astype(np.float32) * dark).clip(0, 255).astype(np.uint8)
-    out = cv2.bilateralFilter(out, 7, 100, 100)
+    out = cv2.medianBlur(out, 3)
     return Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
 
 
