@@ -203,6 +203,26 @@ def _normalize(script: dict) -> dict:
     return script
 
 
+TITLE_TMPL = """Вот заголовок YouTube Shorts на русском: \"{title}\"
+О чём видео: {context}
+Если в заголовке есть бессмысленные, выдуманные или искажённые слова — замени их на правильные.
+Верни ОДНУ строку: готовый заголовок КАПСОМ, до 80 символов, в стиле «ЭТОТ МАТЕМАТИК СПАС ТЫСЯЧИ САМОЛЕТОВ ВО ВРЕМЯ ВОЙНЫ!». Без пояснений и кавычек."""
+
+
+def _fix_title(script: dict) -> dict:
+    scenes = script.get("scenes") or []
+    first = str(scenes[0].get("text", "")) if scenes and isinstance(scenes[0], dict) else ""
+    prompt = TITLE_TMPL.format(title=str(script.get("title", "")), context=first[:300])
+    try:
+        fixed = _ask_llm(prompt).strip().strip('"')
+        fixed = fixed.splitlines()[0].strip()
+    except Exception:  # noqa: BLE001
+        return script
+    if 10 <= len(fixed) <= 90 and re.search(r"[А-ЯЁ]", fixed) and re.search(r"[а-яё\w]", fixed.lower()):
+        script["title"] = fixed.upper()
+    return script
+
+
 def generate_script(era: str | None = None) -> dict:
     era = era or random.choice(ERAS)
     prompt = PROMPT_TMPL.format(era=era)
@@ -227,6 +247,8 @@ def generate_script(era: str | None = None) -> dict:
     if best is None:
         raise RuntimeError(f"Не удалось получить сценарий: {last_err}")
     print(f"      качество сценария: {best_score:.0%}")
+    best = _fix_title(best)
+    print(f"      финальный title: {best.get('title', '')}")
     return best
 
 
