@@ -46,6 +46,12 @@ jobs:
           if [ -f patches/images.py ]; then
             MOUNTS="$MOUNTS -v $PWD/patches/images.py:/app/shorts_factory/images.py"
           fi
+          if [ -f patches/tts.py ]; then
+            MOUNTS="$MOUNTS -v $PWD/patches/tts.py:/app/shorts_factory/tts.py"
+          fi
+          if [ -f patches/video.py ]; then
+            MOUNTS="$MOUNTS -v $PWD/patches/video.py:/app/shorts_factory/video.py"
+          fi
           docker run --rm -v "$PWD/output:/app/output" $MOUNTS \
             -e GEMINI_API_KEY -e POLLINATIONS_TOKEN -e YT_CLIENT_ID -e YT_CLIENT_SECRET -e YT_REFRESH_TOKEN \
             shorts-factory python -m shorts_factory.pipeline /app/output $ARGS
