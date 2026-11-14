@@ -534,8 +534,19 @@ def publish(meta: dict) -> dict:
     if not os.environ.get("YT_REFRESH_TOKEN"):
         enqueue(meta)
         return {"status": "queued", "reason": "YouTube credentials не настроены"}
-    result = upload(meta["video"], meta["title"], meta["description"], meta["tags"])
-    return {"status": "published", **result}
+    try:
+        result = upload(meta["video"], meta["title"], meta["description"], meta["tags"])
+        return {"status": "published", **result}
+    except urllib.error.HTTPError as e:
+        if e.code != 400:
+            raise
+        # Запасной путь: возможно, часть метаданных не нравится API.
+        # Пробуем минимальный набор: короткое описание без хэштегов, 3 базовых тега.
+        print("[publish] HTTP 400 — повтор с упрощёнными метаданными", flush=True)
+        clean_desc = meta["description"].split("\n#")[0].split("\n\n#")[0]
+        result = upload(meta["video"], meta["title"], clean_desc,
+                        ["shorts", "история", "факты"])
+        return {"status": "published_fallback", **result}
 EOF
 COPY <<'EOF' /app/apps/worker/src/worker/__init__.py
 EOF
