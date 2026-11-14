@@ -5,7 +5,9 @@
 бесплатная LLM даёт ломаный русский, поэтому не используется.
 """
 import copy
+import os
 import random
+import time
 
 SCRIPTS = [
     {
@@ -217,12 +219,160 @@ SCRIPTS = [
     },
 ]
 
+
+EXTRA_SCRIPTS = [
+    {
+        "era": "Новое время",
+        "title": "ЛОНДОН ВОНЯЛ ТАК, ЧТО ПАРЛАМЕНТ СБЕЖАЛ… И ПОСТРОИЛ КАНАЛИЗАЦИЮ 🤢",
+        "description": "Реальная история 1858 года: «Великий смрад». Температура 30+ градусов, Темза — открытая канализация.",
+        "scenes": [
+            {"text": "Лето 1858 года, Лондон. Жара под тридцать. И Темза пахнет так, что город стоит на коленях.",
+             "image_prompt": "Victorian London bridge over the Thames in summer haze, crowds covering faces with handkerchiefs"},
+            {"text": "Дело в том, что канализации в городе НЕ БЫЛО. Сотни тысяч туалетов сливались прямо в реку.",
+             "image_prompt": "cross-section of Victorian houses with pipes draining straight into a murky river"},
+            {"text": "В жару река превратилась в чёрную вонючую жижу. Смерть от болезней в трущобах — массовая.",
+             "image_prompt": "dark green-black river water, industrial barges, sickly poor families at the embankment"},
+            {"text": "Запах дошёл до Парламента. Заседания сорвались: депутаты завешивали окна пропитанными хлором шторами.",
+             "image_prompt": "grand parliament chamber with MPs holding handkerchiefs to faces, curtains soaked in disinfectant"},
+            {"text": "Газеты писали: ещё неделя такой жары — и классы бегут из города. А потом пришла идея.",
+             "image_prompt": "Victorian newspaper office with bold headlines, editors in panic"},
+            {"text": "Построить канализацию. Настоящую. Инженер Джозеф Базалгетт спроектировал 1300 километров туннелей.",
+             "image_prompt": "engineers with blueprints and brick tunnels under construction, Victorian machinery"},
+            {"text": "Строили шесть лет. С тех пор холера в Лондоне практически исчезла.",
+             "image_prompt": "finished brick sewer tunnels stretching into the distance, proud workers with lanterns"},
+            {"text": "Смрад убил никого — но спас миллионы. Подпишись.",
+             "image_prompt": "clean Thames at sunset with modern London skyline, vintage map overlay"},
+        ],
+    },
+    {
+        "era": "Средневековье",
+        "title": "ГОРОДА ВОЕВАЛИ 12 ЛЕТ… ИЗ-ЗА ДЕРЕВЯННОГО ВЕДРА 🪣",
+        "description": "Реальная история 1325 года: война из-за ведра между Моденой и Болоньей. Тысячи погибших.",
+        "scenes": [
+            {"text": "1325 год, Италия. Два города — Модена и Болонья — ненавидели друг друга как никто.",
+             "image_prompt": "two medieval Italian walled cities facing each other across plains, banners of different colors"},
+            {"text": "И вот группа моденцев пробралась в Болонью… и украла из колодца ДЕРЕВЯННОЕ ВЕДРО.",
+             "image_prompt": "medieval soldiers sneaking away at night with a large wooden bucket from a stone well"},
+            {"text": "Зачем? Просто унизить врага. Символ победы. Болонья взбесилась.",
+             "image_prompt": "angry medieval town council pointing at an empty well, furious citizens in the square"},
+            {"text": "Болонья выставила армию: 32 тысячи человек. У Модены было в три раза меньше.",
+             "image_prompt": "huge medieval army marching with banners versus a small defenders formation"},
+            {"text": "Состоялось сражение при Заполино. Болонья ПОТЕРПЕЛА разгромное поражение: тысячи убитых и пленных.",
+             "image_prompt": "chaotic medieval battle with routed army fleeing, captured soldiers, dust and banners fallen"},
+            {"text": "Модена оставила себе трофей. То самое ведро. Оно у них ДО СИХ ПОР.",
+             "image_prompt": "ancient wooden oak bucket displayed in a museum glass case under warm light"},
+            {"text": "Война тянулась двенадцать лет. Оценки погибших — до двух тысяч только в главном сражении.",
+             "image_prompt": "burnt farmland between two cities, smoke columns, exhausted soldiers"},
+            {"text": "Из-за ведра. Настоящее деревянное ведро. Подпишись.",
+             "image_prompt": "close-up of the weathered oak bucket in the museum, dramatic spotlight"},
+        ],
+    },
+    {
+        "era": "Новое время",
+        "title": "ЭЙФЕЛЕВУ БАШНЮ ХОТЕЛИ СНЕСТИ… А ОНА ВЫРОСЛА НА 15 МЕТРОВ 🗼",
+        "description": "Реальная история: башню собирались разобрать через 20 лет. Сегодня она на 15 метров выше, чем при открытии.",
+        "scenes": [
+            {"text": "1889 год. Эйфелеву башню открыли ко Всемирной выставке. И половина Парижа была ПРОТИВ.",
+             "image_prompt": "1889 Paris World's Fair with the new iron tower, elegant crowds, mixed reactions"},
+            {"text": "Триста деятелей культуры подписали протест: «бесполезная и чудовищная» башня-монстр.",
+             "image_prompt": "Victorian artists and writers signing an angry petition in a candlelit salon"},
+            {"text": "Договор аренды был на 20 лет. Потом башню планировали РАЗОБРАТЬ.",
+             "image_prompt": "blueprint of the tower stamped with a date, workers with wrenches waiting nearby"},
+            {"text": "Башню спасла… радиосвязь. Она оказалась идеальной антенной для военных и телеграфа.",
+             "image_prompt": "early radio operators with spark transmitters on the tower's top platform, wires everywhere"},
+            {"text": "В 1914 году её передатчики глушить немецкую радиосвязь. Башня воевала.",
+             "image_prompt": "World War I radio jamming station on the tower, operators with headphones, maps"},
+            {"text": "А теперь факт: летом башня ВЫРАСТАЕТ на 15 сантиметров. Металл расширяется на жаре.",
+             "image_prompt": "the Eiffel Tower in blazing summer sun with subtle heat shimmer, measurement arrows"},
+            {"text": "И отклоняется от солнца: верхушка уходит в тень на 18 сантиметров.",
+             "image_prompt": "the tower leaning slightly away from the sun, exaggerated diagram style"},
+            {"text": "«Чудовище» стало символом Франции. Подпишись.",
+             "image_prompt": "the Eiffel Tower glowing at night over Paris, celebratory lights"},
+        ],
+    },
+    {
+        "era": "Новое время",
+        "title": "ПЕРВЫЙ БАГ В ИСТОРИИ КОМПЬЮТЕРОВ… БЫЛ НАСТОЯЩИМ ЖУКОМ 🦋",
+        "description": "9 сентября 1947 года инженеры Гарварда нашли мотылька внутри компьютера и вклеили его в журнал.",
+        "scenes": [
+            {"text": "1947 год. Компьютер Марк II размером с комнату вдруг начинает выдавать ошибки.",
+             "image_prompt": "room-sized 1940s computer with relays and panels, engineers scratching heads"},
+            {"text": "Грейс Хоппер и её команда проверяют реле — и находят причину.",
+             "image_prompt": "female engineer in 1940s attire inspecting relay panels with a flashlight"},
+            {"text": "Внутри реле сидел НАСТОЯЩИЙ МОТЫЛЁК. Он замыкал контакты.",
+             "image_prompt": "macro view of a moth trapped between relay contacts, dramatic lighting"},
+            {"text": "Мотылька достали и вклеили в журнал с припиской: «первый найденный настоящий баг».",
+             "image_prompt": "logbook page with a taped moth and handwritten caption, vintage desk"},
+            {"text": "Шутка стала термином. С тех пор ошибку в программе называют БАГОМ.",
+             "image_prompt": "vintage typewriter and modern laptop side by side with the word bug glowing"},
+            {"text": "Кстати, слово «баг» использовал ещё Эдисон — за 70 лет до этого.",
+             "image_prompt": "Thomas Edison at his workbench with notebooks, lightbulbs around"},
+            {"text": "А «отладку» — дебаггингом. Всё из-за одного мотылька. Подпишись.",
+             "image_prompt": "the famous moth page in a museum display case, soft spotlight"},
+        ],
+    },
+    {
+        "era": "Новое время",
+        "title": "В 1816 ГОДУ НЕ БЫЛО ЛЕТА… ВО ВСЁМ МИРЕ ❄️",
+        "description": "Реальная история: год без лета. Снег в июле, голод по всей планете. Виноват вулкан в Индонезии.",
+        "scenes": [
+            {"text": "Апрель 1815 года. Вулкан Тамбора в Индонезии взрывается с силой в 800 раз мощнее Хиросимы.",
+             "image_prompt": "colossal volcanic eruption at night, lightning inside the ash column, ships fleeing"},
+            {"text": "Миллионы тонн пепла улетели в стратосферу и накрыли планету как одеялом.",
+             "image_prompt": "vast ash cloud spreading around the globe seen from high altitude, sun dimmed"},
+            {"text": "И в 1816 году лето НЕ ПРИШЛО. В июне в Новой Англии выпал снег.",
+             "image_prompt": "colonial village in June covered in snow, frozen crops, people in heavy coats"},
+            {"text": "В июле и августе — лёд на реках. Фермеры теряли урожай по два раза за сезон.",
+             "image_prompt": "farmer standing in a ruined frozen field in summer, dead corn stalks"},
+            {"text": "Начался голод. Цены на зерно взлетели в разы. Беженцы двигались целыми деревнями.",
+             "image_prompt": "long line of farmers with carts leaving a village, empty markets, grey sky"},
+            {"text": "Побочный эффект: из-за дождей в Швейцарии заперся 18-летний Мэри Шелли. Она написала «Франкенштейна».",
+             "image_prompt": "young woman writing by candlelight in a storm-lashed villa on Lake Geneva"},
+            {"text": "Ещё побочный: изобрели велосипед. Лошади подорожали — нужен был транспорт без овса.",
+             "image_prompt": "early wooden draisine bicycle prototype on a muddy road, inventor pushing it"},
+            {"text": "Один вулкан изменил литературу, транспорт и судьбы миллионов. Подпишись.",
+             "image_prompt": "distant smoking volcano over a peaceful sunset landscape with a road and bicycle tracks"},
+        ],
+    },
+    {
+        "era": "Новое время",
+        "title": "СМОГ УБИВАЛ ЛОНДОН ЗА 5 ДНЕЙ… И ЭТО БЫЛО В 1952 ГОДУ 🌫️",
+        "description": "Реальная история: Великий смог. Тысячи погибших в самом сердце XX века — и это изменило экологию навсегда.",
+        "scenes": [
+            {"text": "Декабрь 1952 года, Лондон. Над городом повисла антициклонная тишь. И весь дым от угля остался ВНУТРИ.",
+             "image_prompt": "1950s London street swallowed by thick yellow-grey smog, buses barely visible"},
+            {"text": "Видимость упала до метра. Автобусы шли за кондуктором с фонарём.",
+             "image_prompt": "conductor walking ahead of a double-decker bus with a lantern in dense smog"},
+            {"text": "Смог пробирался даже в дома. Концерты отменяли: зрители не видели сцену.",
+             "image_prompt": "theatre hall with audience barely seeing the stage through haze, empty seats"},
+            {"text": "За пять дней погибли около ЧЕТЫРЁХ ТЫСЯЧ человек. Позже счёт пошёл на десятки тысяч.",
+             "image_prompt": "hospital corridors crowded with patients on beds, nurses with masks, somber tones"},
+            {"text": "Врачи сначала не верили: жертв больше, чем от эпидемии. Причина — копоть в лёгких.",
+             "image_prompt": "doctor examining X-ray photographs under a light board, shocked expression"},
+            {"text": "Через четыре года приняли Закон о чистом воздухе. Уголь в городах запретили.",
+             "image_prompt": "parliament voting with hands raised, clean chimneys and electric heaters in homes"},
+            {"text": "Лондонский смог стал поводом для первых экологических законов Европы.",
+             "image_prompt": "modern clean London skyline at dawn, archival smog photo ghosted in the corner"},
+            {"text": "Один месяц зимы изменил законы всего мира. Подпишись.",
+             "image_prompt": "sunrise clearing over the Thames, city waking up, hopeful mood"},
+        ],
+    },
+]
+
+
+SCRIPTS.extend(EXTRA_SCRIPTS)
+
 ERAS = sorted({s["era"] for s in SCRIPTS})
 
 
 def generate_script(era: str | None = None) -> dict:
     pool = [s for s in SCRIPTS if s["era"] == era] if era else SCRIPTS
-    script = copy.deepcopy(random.choice(pool or SCRIPTS))
+    slot = os.environ.get("SHORTS_SLOT")
+    if slot is not None and not era:
+        day = int(time.strftime("%Y%m%d"))
+        script = copy.deepcopy(SCRIPTS[(day * 5 + int(slot)) % len(SCRIPTS)])
+    else:
+        script = copy.deepcopy(random.choice(pool or SCRIPTS))
     script.setdefault("tags", ["#shorts", "#история", "#факты", "#историческиефакты", script["era"].lower()])
     return script
 
