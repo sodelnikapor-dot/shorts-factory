@@ -220,6 +220,7 @@ def make_video(scenes: list[dict], audio_files: list[str], subtitle_tracks: list
     subtitle_tracks: тайминги относительно начала сцены."""
     scene_clips = []
     scene_starts = []
+    opened_stock = []
     cursor = 0.0
     deadline = time.monotonic() + STOCK_BUDGET
     for i, (scene, audio) in enumerate(zip(scenes, audio_files)):
@@ -239,13 +240,13 @@ def make_video(scenes: list[dict], audio_files: list[str], subtitle_tracks: list
         scene_start = cursor
         shots = []
         if stock is not None:
+            opened_stock.append(stock)
             vdur = stock.duration or 0.0
             if vdur >= d1 + d2 + 1.0:
                 shots.append(_fit_vertical(stock, d1, 0.15))
                 shots.append(_fit_vertical(stock, d2, 0.75))
             else:
                 shots.append(_fit_vertical(stock, duration, 0.3))
-            stock.close()
         else:
             plate = np.asarray(Image.open(scene["image"]).convert("RGB")).astype(np.float32)
             ph, pw = plate.shape[:2]
@@ -284,4 +285,9 @@ def make_video(scenes: list[dict], audio_files: list[str], subtitle_tracks: list
 
     video.write_videofile(out_path, fps=FPS, codec="libx264", audio_codec="aac",
                           preset="medium", ffmpeg_params=["-crf", "21"], logger=None)
+    for v in opened_stock:
+        try:
+            v.close()
+        except Exception:  # noqa: BLE001
+            pass
     return out_path
