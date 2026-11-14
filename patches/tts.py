@@ -76,7 +76,9 @@ def build_subtitles(word_timings: list[dict], max_chars: int = 18, pause: float 
         })
     merged = []
     for sub in subs:
-        if merged and len(merged[-1]["text"]) < 6:
+        prev = merged[-1]["text"] if merged else ""
+        crosses_sentence = prev.endswith((".", "!", "?", "…"))
+        if merged and len(prev) < 6 and not crosses_sentence:
             merged[-1]["text"] += " " + sub["text"]
             merged[-1]["end"] = sub["end"]
         else:
