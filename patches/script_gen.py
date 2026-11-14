@@ -1,338 +1,257 @@
 """
-Идея + сценарий для исторического шортса. Приоритет провайдеров:
-GEMINI_API_KEY (бесплатный Gemini API, лучшее качество) -> MISTRAL_API_KEY ->
-открытый API pollinations (без ключа). Каждый кандидат оценивается на связность,
-конкретику и структуру; из нескольких попыток берётся лучший."""
-import json
-import os
+Сценарии для исторического шортса в стиле Кубыча: рассказ от первого лица,
+саспенс, твист в конце, вирусный заголовок. Тексты написаны вручную —
+бесплатная LLM (GPT-OSS 20B) даёт ломаный русский, поэтому не используется.
+"""
+import copy
 import random
-import re
-import time
-import urllib.request
 
-POLLINATIONS_TEXT = "https://text.pollinations.ai/openai"
-
-ERAS = [
-    "Древний Египет", "Древний Рим", "Древняя Греция", "Средневековье",
-    "Викинги", "Древняя Русь", "Российская империя", "Эпоха Наполеона",
-    "Вторая мировая война", "Эпоха Возрождения", "Древний Китай",
-    "Ацтеки и майя", "Золотая Орда", "Византия", "Эпоха великих географических открытий",
+SCRIPTS = [
+    {
+        "era": "Древний Китай",
+        "title": "Я ПОСТРОИЛ МАШИНУ, КОТОРАЯ ЧУВСТВУЕТ ЗЕМЛЕТРЯСЕНИЕ ЗА 400 КМ… НО МНЕ СМЕЯЛИСЬ В ЛИЦО 🐉",
+        "description": "132 год. Чжан Хэн создал первый в истории сейсмоскоп — и все смеялись, пока не сработал дракон.",
+        "scenes": [
+            {"text": "132 год. Дворец Хань в панике: на западных границах снова рушатся города. Я, Чжан Хэн, обещаю невозможное — прибор, который услышит землетрясение за сотни километров.",
+             "image_prompt": "Ancient Chinese imperial court, an astronomer in hanfu robes standing before the emperor, presenting a large bronze vessel, ministers whispering behind fans"},
+            {"text": "Мой сейсмоскоп — бронзовый сосуд, а вокруг него восемь драконов. В пасти каждого — медный шар. Восемь сторон света. Восемь шансов поймать беду.",
+             "image_prompt": "Ornate bronze Chinese seismoscope vessel surrounded by eight sculpted dragons holding copper balls in their mouths, toads waiting below, palace hall"},
+            {"text": "Дни идут. Прибор молчит. Придворные шепчутся: старик сошёл с ума. И вдруг — КЛАНГ. Шар падает из пасти западного дракона.",
+             "image_prompt": "Dramatic moment of a copper ball dropping from a bronze dragon mouth into a toad's mouth, courtiers frozen in shock, dust in the air, Chinese palace"},
+            {"text": "Все смеются: на западе нет землетрясения! Но через несколько дней скачет гонец: город Лунси разрушен. Именно на западе.",
+             "image_prompt": "Exhausted imperial messenger on horseback arriving through the gates of a Chinese palace at dusk, guards running toward him, tense atmosphere"},
+            {"text": "С того дня никто больше не смеётся. Мой сосуд стал первым в истории сейсмоскопом — за 1800 лет до европейских приборов. Подпишись — таких историй будет больше.",
+             "image_prompt": "Chinese astronomers bowing respectfully before the bronze seismoscope in candlelight, the inventor standing tall, ceremonial hall, warm lantern glow"},
+        ],
+    },
+    {
+        "era": "Древний Китай",
+        "title": "КРЕСТЬЯНЕ КОПАЛИ КОЛОДЕЦ И НАШЛИ 8000 ВОИНОВ, КОТОРЫЕ ЖДАЛИ ИХ 2200 ЛЕТ ⚔️",
+        "description": "1974 год, Сиань. Крестьяне искали воду — а нашли Терракотовую армию императора Цинь Шихуанди.",
+        "scenes": [
+            {"text": "1974 год, деревня под Сианем. Стоит засуха, мы копаем колодец. Лопата врезается во что-то твёрдое. Я думал — камень. Это было ЛИЦО.",
+             "image_prompt": "Chinese farmers digging a well in a dry field, one farmer frozen in shock looking down into the pit, 1970s rural China, dusty earth"},
+            {"text": "Из земли смотрела глиняная голова воина. Целая. С усами и доспехами. Мы в ужасе бросились прочь — кто закапывает солдат под землю?",
+             "image_prompt": "Close-up of an ancient terracotta warrior head emerging from dark earth in a well pit, farmers recoiling in fear, dramatic lighting"},
+            {"text": "Приехали учёные. Оказалось: под нашими полями спрятана ЦЕЛАЯ АРМИЯ. Более 8000 воинов императора Цинь Шихуанди. И у каждого — собственное лицо.",
+             "image_prompt": "Vast underground excavation site filled with thousands of terracotta warriors in rows, archaeologists with lanterns walking between them, epic scale"},
+            {"text": "2200 лет назад лучший мастер делал воина за месяц. Ни один солдат не повторяет другого. Все они охраняли императора в загробном мире.",
+             "image_prompt": "Ancient Chinese craftsmen sculpting individual terracotta warrior faces in a workshop, rows of unfinished statues, imperial overseer watching"},
+            {"text": "Мы искали воду — а нашли восьмое чудо света. Теперь сюда приезжают миллионы туристов. А ведь могли пробурить в другом месте… Подпишись!",
+             "image_prompt": "Modern tourists looking down at the terracotta army excavation pits in a museum, sunlight streaming in, awe on their faces"},
+        ],
+    },
+    {
+        "era": "Средневековье",
+        "title": "Я НЕ МОГ ПЕРЕСТАТЬ ТАНЦЕВАТЬ… И ЧЕРЕЗ МЕСЯЦ НАС БЫЛО 400 😱",
+        "description": "Танцевальная чума 1518 года в Страсбурге: одна женщина не могла остановиться — и город пошёл за ней.",
+        "scenes": [
+            {"text": "Июль 1518 года, Страсбург. Меня зовут Фрау Троффеа. Я вышла на улицу и начала танцевать. Обычная джига. Но через час я поняла: я не могу ОСТАНОВИТЬСЯ.",
+             "image_prompt": "Medieval woman in a worn dress dancing alone on a cobblestone street in Strasbourg, her face showing fear and exhaustion, townspeople turning to stare"},
+            {"text": "Ноги горят, сердце колотится, а тело танцует. Ночь. Утро. Я умоляю о пощаде — а ноги продолжают. Люди собираются смотреть.",
+             "image_prompt": "Exhausted medieval woman still dancing through the night, torchlight, crowd of worried townspeople watching from doorways, moonlit medieval city"},
+            {"text": "Через неделю танцуют уже десятки. Через месяц — около 400 человек. Город танцует и умирает: от жары, от голода, от изнеможения.",
+             "image_prompt": "Hundreds of medieval people dancing uncontrollably in a town square, some collapsing on the ground, clergy praying in horror, chaos"},
+            {"text": "Врачи поставили диагноз: «горячая кровь». Их лечение — ЖЕСТОЧЕЕ: нам велели танцевать ещё больше, на ярмарочной площади, под музыку.",
+             "image_prompt": "Medieval physicians in robes observing dancers from a balcony, musicians playing instruments in the square while exhausted dancers stumble, grim scene"},
+            {"text": "Что это было — отравление спорыньёй, массовый психоз, проклятие? До сих пор никто не знает. Танцевальная чума 1518 года остаётся загадкой. Подпишись, если любишь такие тайны.",
+             "image_prompt": "Empty medieval square at dawn after the dancing plague, abandoned shoes and shawls on cobblestones, mist, single raven, haunting atmosphere"},
+        ],
+    },
+    {
+        "era": "Вторая мировая война",
+        "title": "ВОЕННЫЕ ХОТЕЛИ БРОНИРОВАТЬ ПРОБОИНЫ… А МАТЕМАТИК СКАЗАЛ: ВЫ СМОТРИТЕ НЕ ТУДА 🎯",
+        "description": "Абрахам Вальд и ошибка выжившего: как математика спасла тысячи бомбардировщиков в 1943 году.",
+        "scenes": [
+            {"text": "1943 год. Я — Абрахам Вальд, математик. Ко мне приносят данные о самолётах, вернувшихся из боя. Весь фюзеляж в пробоинах. Генералы говорят: вот здесь и ставим броню.",
+             "image_prompt": "1940s military briefing room, generals pointing at a diagram of a bomber covered in bullet hole markers, a bespectacled mathematician studying papers"},
+            {"text": "И я говорю то, что звучит как безумие: бронировать надо места, где пробоин НЕТ. Там, где самолёт чистый. Все замирают.",
+             "image_prompt": "The mathematician standing and pointing at clean untouched areas of the aircraft diagram, generals staring in disbelief, chalkboard behind him"},
+            {"text": "Смотрите: вы видите только вернувшиеся самолёты. Пробоины в двигателе? Такие машины уже не долетали домой. Их просто нет в ваших данных.",
+             "image_prompt": "A damaged bomber struggling through smoke-filled sky, engine on fire, while another falls toward the clouds, dramatic wartime scene"},
+            {"text": "Это называется «ошибка выжившего»: мы судим по тем, кто вернулся, и не видим тех, кто погиб. Мои выводы спасли тысячи лётчиков.",
+             "image_prompt": "Rows of returning bombers on an airfield at sunset, mechanics armoring cockpits and engines, pilots looking up with hope"},
+            {"text": "Запомни: самые важные данные — те, которых ты не видишь. Это работает и в бизнесе, и в жизни. Подпишись — расскажу ещё, как математика меняла войны.",
+             "image_prompt": "The mathematician alone at night in his office writing equations, war maps and aircraft diagrams on walls, desk lamp glow, contemplative mood"},
+        ],
+    },
+    {
+        "era": "Вторая мировая война",
+        "title": "НЕМЦЫ ЗВАЛИ НАС ВЕДЬМАМИ… МЫ ЛЕТАЛИ НА ФАНЕРЕ И БИЛИ БЕЗ ПРОМАХА 🌙",
+        "description": "46-й гвардейский женский ночной полк: фанерные У-2, заглушенный мотор и прозвище «ночные ведьмы».",
+        "scenes": [
+            {"text": "Ночь. Фронт замирает. И тут в небе — тихий шелест. Немецкие солдаты вжимаются в окопы: ПРИШЛИ ВЕДЬМЫ.",
+             "image_prompt": "German soldiers in a trench at night looking up in terror at a tiny biplane silhouette crossing the moon, searchlights sweeping the sky"},
+            {"text": "Мы — 46-й гвардейский женский полк. Девчонки семнадцати-двадцати двух лет. Наши У-2 — фанера и полотно, учебные «кукурузники». Без радио. Без пулемётов.",
+             "image_prompt": "Young Soviet women pilots in flight jackets and caps standing beside a small wooden U-2 biplane at a night airfield, camaraderie and determination"},
+            {"text": "Мы летали только ночью, на малой высоте. Подлетали к цели — и глушали мотор. Тишина. Свист. Бомба. Немцы слышали нас лишь в последнюю секунду.",
+             "image_prompt": "A small biplane gliding silently over a German supply depot at night, bombs falling, explosions below, moonlit clouds"},
+            {"text": "За одну ночь мы делали до пятнадцати вылетов. Фанерный самолётик возвращался снова и снова, и ничто не могло его остановить. Нас прозвали «ночными ведьмами».",
+             "image_prompt": "Women pilots preparing their biplane for another sortie before dawn, bombs being loaded, exhausted but resolute faces, airfield lanterns"},
+            {"text": "Двадцать три из нас стали Героями Советского Союза. Фанера оказалась страшнее стали. Подпишись — историй из войны ещё много.",
+             "image_prompt": "Soviet women pilots in dress uniforms receiving medals at a ceremony, flowers and pride, audience applauding, wartime Moscow"},
+        ],
+    },
+    {
+        "era": "Викинги",
+        "title": "Я ДОПЛЫЛ ДО АМЕРИКИ ЗА 500 ЛЕТ ДО КОЛУМБА… И ОБ ЭТОМ ВСЕ ЗАБЫЛИ НА ТЫСЯЧУ ЛЕТ ⚓",
+        "description": "Лейф Эриксон и Винланд: викинги в Северной Америке около 1000 года — доказано археологами.",
+        "scenes": [
+            {"text": "Около 1000 года. Я — Лейф Эриксон, сын Эрика Рыжего. В Норвегии я услышал историю о земле на западе, которую видел один сбившийся с пути капитан. И купил его корабль.",
+             "image_prompt": "Norse longship in a Norwegian fjord, a red-bearded Viking leader examining a weathered ship, misty mountains, sailors loading supplies"},
+            {"text": "Тридцать пять человек. Один корабль. Открытое море без карт и компаса — только солнце, звёзды и птицы, летящие на запад.",
+             "image_prompt": "Viking longship on the open Atlantic under a starry sky, sailors navigating by stars and birds flying west, dramatic waves"},
+            {"text": "Сначала каменная пустошь. Потом бесконечные леса. Наконец — земля, где растёт дикий виноград. Я назвал её Винланд. Мы построили дома и зазимовали.",
+             "image_prompt": "Vikings building wooden turf-roof houses in a lush North American coastal landscape, wild grapevines growing nearby, campfires at dusk"},
+            {"text": "Через пятьсот лет Колумб «откроет» Америку и прославится на весь мир. А про нашу высадку забыли на целую тысячу лет.",
+             "image_prompt": "Overgrown abandoned Viking settlement in mist on one side, a grand Columbus-era sailing ship approaching on the other, split composition"},
+            {"text": "В 1960-х археологи раскопали Л'Анс-о-Медоуз в Канаде — наши дома. Доказательство: викинги были первыми. Историю пишут не всегда те, кто был первым. Подпишись!",
+             "image_prompt": "Archaeologists carefully excavating Norse turf house foundations in Newfoundland, artifacts on a table, dramatic coastal landscape"},
+        ],
+    },
+    {
+        "era": "Древняя Греция",
+        "title": "СО ДНА МОРЯ ПОДНЯЛИ КУСОК БРОНЗЫ… ЭТО КОМПЬЮТЕР ИЗ 100 ГОДА ДО НАШЕЙ ЭРЫ 🌊",
+        "description": "Антикитерский механизм: астрономический калькулятор, который Европа повторила лишь через 1500 лет.",
+        "scenes": [
+            {"text": "1901 год, Греция. В сетях ловцов губок — обломок античного корабля. Среди мраморных статуй лежит невзрачный кусок бронзы. Его чуть не выбросили.",
+             "image_prompt": "Greek sponge divers on a boat examining corroded bronze fragments and ancient statues pulled from the sea, early 1900s, Aegean waters"},
+            {"text": "Через полвека рентген показал НЕВОЗМОЖНОЕ: внутри — десятки шестерёнок. Точных. Вычисляющих. Как в часах шестнадцатого века.",
+             "image_prompt": "X-ray style visualization of the Antikythera mechanism revealing intricate interlocking bronze gears inside a corroded fragment, laboratory setting"},
+            {"text": "Это Антикитерский механизм. Вращаешь ручку — и прибор показывает положение солнца, луны и планет. Он даже предсказывал затмения.",
+             "image_prompt": "Reconstructed Antikythera mechanism with bronze dials and pointers showing celestial bodies, hands turning the crank, ancient Greek workshop"},
+            {"text": "Ему больше двух тысяч лет. Такой уровень механики Европа повторила лишь через полторы тысячи лет. Кто создал это? Мы не знаем до сих пор.",
+             "image_prompt": "Ancient Greek philosopher-engineer in a toga studying gear designs by candlelight, scrolls and bronze tools around, mysterious atmosphere"},
+            {"text": "Один прибор меняет всё, что мы думали о древних. А сколько таких механизмов сгинуло в море? Подпишись — тайны истории только начинаются.",
+             "image_prompt": "Sunken ancient shipwreck on the Mediterranean seabed, bronze mechanism fragments half-buried in sand, shafts of light from above, fish swimming"},
+        ],
+    },
+    {
+        "era": "Древняя Греция",
+        "title": "ПАРОВУЮ МАШИНУ ИЗОБРЕЛИ 2000 ЛЕТ НАЗАД… И ИСПОЛЬЗОВАЛИ КАК ИГРУШКУ ⚙️",
+        "description": "Эолипил Герона Александрийского: паровая машина до нашей эры — и почему промышленная революция опоздала.",
+        "scenes": [
+            {"text": "Александрия, первый век. Я — Герон, инженер. Сегодня я превращу кипящую воду в движение. Никто в мире ещё не делал такого.",
+             "image_prompt": "Ancient Greek engineer in Alexandria working at a bench with bronze vessels and fire, scrolls and tools, great library in the background"},
+            {"text": "Мой эолипил — полый шар на двух трубках. Пар вырывается из изогнутых сопел — и шар ВРАЩАЕТСЯ. Реактивная тяга, за две тысячи лет до ракет.",
+             "image_prompt": "Aeolipile device spinning on its axis over a flame, steam jets from curved nozzles, bronze sphere gleaming, ancient Greek laboratory"},
+            {"text": "Это первая паровая машина в истории. Тот же принцип будет крутить паровозы и пароходы — но лишь в девятнадцатом веке.",
+             "image_prompt": "Composition showing the ancient aeolipile fading into a 19th century steam locomotive silhouette, steam and gears connecting two eras"},
+            {"text": "Но богатые горожане смеются: «Зачем заменять рабочих машинами?» Мою паровую машину ставят в храм — крутить двери и творить «чудеса» для верующих.",
+             "image_prompt": "Aeolipile installed in a grand temple opening massive doors as worshippers watch in awe, priests gesturing, marble columns and incense"},
+            {"text": "Промышленная революция могла случиться на 1700 лет раньше. Но история выбрала другую дорогу. Подпишись — расскажу ещё о потерянных изобретениях.",
+             "image_prompt": "The engineer standing alone at dusk overlooking ancient Alexandria harbor, holding the small bronze sphere, ships in the distance, golden light"},
+        ],
+    },
+    {
+        "era": "Древняя Русь",
+        "title": "МАЛЬЧИКУ БЫЛО СЕМЬ ЛЕТ… А ЕГО «ШПАРГАЛКИ» ПРОЖИЛИ 800 ЛЕТ ✍️",
+        "description": "Новгородский мальчик Онфим: его берестяные уроки тринадцатого века археологи нашли в двадцатом.",
+        "scenes": [
+            {"text": "Новгород, тринадцатый век. Я — Онфим, мне лет семь. Скучно на уроке у дьячка. Беру бересту и пишу на ней всё, что хочу.",
+             "image_prompt": "Medieval Novgorod school interior, a small boy in a linen shirt scratching letters on birch bark with a stylus, strict teacher in the background"},
+            {"text": "Я упражняюсь в буквах и складах. А рядом рисую себя — страшным зверем на коне, с копьём наперевес. Пусть все боятся!",
+             "image_prompt": "Close-up of birch bark with childish Cyrillic letters and a drawing of a boy as a fierce beast on horseback with a spear, medieval stylus nearby"},
+            {"text": "Иногда пишу то, что задали. Иногда — каракули, как все дети. А иногда просто царапаю рисунок и бросаю бересту прямо на землю.",
+             "image_prompt": "A mischievous boy tossing birch bark scraps onto a muddy medieval Novgorod street, wooden houses and market stalls behind him"},
+            {"text": "Всё, что я «насорил» на улице, утонуло в грязи. Грязь спасла бересту: бумага бы сгнила, а береста пролежала восемь веков.",
+             "image_prompt": "Dark wet medieval soil layers preserving birch bark documents, an archaeologist's trowel gently revealing them, underground cross-section"},
+            {"text": "В двадцатом веке археологи нашли сотни берестяных грамот. И среди них — мои уроки. Я самый юный автор Средневековья, которого знает весь мир. Подпишись!",
+             "image_prompt": "Modern archaeologist in Novgorod holding a birch bark document with child's handwriting, excavation site, wonder on faces, museum light"},
+        ],
+    },
+    {
+        "era": "Российская империя",
+        "title": "ОТЕЦ ДУМАЛ, Я СБЕЖАЛ НА ОБЫВА… А Я ПЕШКОМ ПОШЁЛ В МОСКВУ СТАТЬ УЧЁНЫМ 📚",
+        "description": "1730 год: девятнадцатилетний Михайло Ломоносов тайно уходит с рыбным обозом — и становится первым русским академиком.",
+        "scenes": [
+            {"text": "Декабрь 1730 года. Мне девятнадцать. Ночь, мороз трещит. Я беру две смены белья и книги — и тайно ухожу из северной деревни.",
+             "image_prompt": "Young man in sheepskin coat leaving a northern Russian village at night in deep snow, moonlight on log houses, bundle over his shoulder"},
+            {"text": "Отец — помор, рыбак. Хотел передать мне своё дело. Но я выбираю другое: уйти учиться. Пусть это и похоже на бегство.",
+             "image_prompt": "Elderly Pomor fisherman mending nets by the White Sea looking at the horizon, his son's silhouette walking away in the distance"},
+            {"text": "Три недели пешком с рыбным обозом до Москвы. Мороз, метели, ночёвки у костров. Я иду и повторяю про себя грамматику.",
+             "image_prompt": "Fish caravan with sledges crossing vast snowy Russian landscape, the young man walking alongside, blizzard approaching, campfire at night"},
+            {"text": "В Москве я говорю приёмной комиссии, что я из дворян. Иначе крестьянского сына не возьмут. Академия. Мне девятнадцать, а мои одноклассники — дети.",
+             "image_prompt": "Grand academy hall in Moscow, the tall young man among much younger students reciting from an old book, strict teachers watching"},
+            {"text": "Пятнадцать лет спустя я — первый русский академик. Химия, физика, поэзия, мозаика, астрономия. Всё началось с ночного побега. Подпишись.",
+             "image_prompt": "Mikhail Lomonosov as an esteemed academician in a St Petersburg laboratory with scientific instruments and mosaics, imperial recognition"},
+        ],
+    },
+    {
+        "era": "Византия",
+        "title": "ЭТОТ ОГОНЬ ГОРЕЛ ДАЖЕ НА ВОДЕ… А ПОТОМ РЕЦЕПТ ИСЧЕЗ НАВСЕГДА 🔥",
+        "description": "Греческий огонь — строжайшая государственная тайна Византии. Формулу не смогли восстановить до сих пор.",
+        "scenes": [
+            {"text": "674 год. Арабский флот блокирует Константинополь. Городу остаётся молиться. Но у византийцев есть ТАЙНОЕ ОРУЖИЕ, о котором враг не знает.",
+             "image_prompt": "Massive Arab fleet surrounding the sea walls of Constantinople at dusk, defenders on the battlements preparing bronze siphons, tension in the air"},
+            {"text": "Из медных труб на кораблях бьют струи жидкого огня. Он вспыхивает от искры и ГОРИТ НА ВОДЕ. Морская битва превращается в ад.",
+             "image_prompt": "Byzantine warship spraying liquid fire from bronze siphons onto enemy ships, flames burning on the water surface, chaotic naval battle"},
+            {"text": "Это греческий огонь. Состав знает лишь семья императоров и несколько слуг. Рецепт передают строго по наследству — и никогда не записывают целиком.",
+             "image_prompt": "Secret imperial workshop, robed alchemists preparing the fire mixture under guard, the emperor watching closely, sealed clay vessels"},
+            {"text": "Враги пытаются повторить оружие — и не могут. Даже союзники не знают рецепта. Целые войны выиграны одной тайной.",
+             "image_prompt": "Enemy alchemists failing to recreate burning liquid in a captured camp, failed experiments and smoke, frustrated commanders"},
+            {"text": "После падения Византии рецепт теряется НАВСЕГДА. Тысячу лет учёные пытаются его восстановить — и лишь строят догадки. Некоторые тайны уходят вместе с хранителями. Подпишись.",
+             "image_prompt": "Ruined Byzantine fortress overgrown with vegetation, a single unopened clay vessel half-buried in rubble, sunset, lost secrets atmosphere"},
+        ],
+    },
+    {
+        "era": "Ацтеки и майя",
+        "title": "В 1519 ГОДУ ПОСРЕДИ ОЗЕРА СТОЯЛ ГОРОД НА 200 000 ЧЕЛОВЕК… ИСПАНЦЫ НЕ ПОВЕРИЛИ ГЛАЗАМ 🏙️",
+        "description": "Теночтитлан был больше любого европейского города своего времени. Через два года от него не осталось ничего.",
+        "scenes": [
+            {"text": "1519 год. Испанцы поднимаются на перевал и замирают: посреди озера — огромный город. Белые пирамиды, прямые улицы, каналы, полные лодок.",
+             "image_prompt": "Spanish conquistadors on a mountain pass looking down in awe at Tenochtitlan rising from a lake, white pyramids and causeways, dramatic vista"},
+            {"text": "Это Теночтитлан, столица ацтеков. Около двухсот тысяч жителей. Ни в Испании, ни во Франции нет города такого размера. Ни одного.",
+             "image_prompt": "Bustling aerial view of Tenochtitlan, crowded markets, canals with canoes, the great temple pyramid, causeways filled with people"},
+            {"text": "Кортес пишет королю: ему не верят! Город на воде построен без железа, без колёс, без тягловых животных. Как это возможно?",
+             "image_prompt": "Hernan Cortes writing a letter by candlelight in a captured palace, maps and Aztec gold on the table, soldiers arguing in the background"},
+            {"text": "Ацтеки кормят город «плавучими садами» — чинампами. С одного участка снимают до семи урожаев в год. Инженерия без единого гвоздя.",
+             "image_prompt": "Farmers harvesting crops on floating chinampa gardens on the lake, baskets of vegetables, canoes loaded with produce, morning light"},
+            {"text": "Через два года город будет разрушен до основания. На его месте встанет Мехико. Европа увидела будущее — и не поняла его. Подпишись.",
+             "image_prompt": "Tenochtitlan in flames during the siege, smoke over the lake, ruins in the foreground fading into colonial Mexico City buildings"},
+        ],
+    },
+    {
+        "era": "Великие географические открытия",
+        "title": "ИЗ 250 МОРЯКОВ ДОМОЙ ВЕРНУЛИСЬ 18… НО ОНИ ДОКАЗАЛИ, ЧТО ЗЕМЛЯ КРУГЛАЯ 🌍",
+        "description": "Плавание Магеллана 1519-1522: три года, пять кораблей и первое кругосветное путешествие в истории.",
+        "scenes": [
+            {"text": "1519 год, Севилья. Пять кораблей выходят в море. Двести пятьдесят человек. Мы ищем западный путь к островам пряностей — вокруг ВСЕГО мира.",
+             "image_prompt": "Five tall sailing ships leaving Seville harbor amid crowds and farewell banners, sailors waving from rigging, dawn departure"},
+            {"text": "Тихий океан встречает нас голодом. Три месяца и двадцать дней мы не видим земли. Едим опилки и крыс. Умирают десятки.",
+             "image_prompt": "Emaciated sailors on a becalmed ship in the vast Pacific, empty water barrels, broken expressions, endless empty horizon"},
+            {"text": "Филиппины. Магеллан вмешивается в местную войну — и гибнет в бою на берегу. Мы теряем капитана и почти всё доверие друг к другу.",
+             "image_prompt": "Magellan falling in battle on a tropical beach, swords and spears, ships firing from the bay, chaos among the crew"},
+            {"text": "Из пяти кораблей остаётся один — «Виктория». Из двухсот пятидесяти человек — восемнадцать. Три года странствий — и вот родной берег.",
+             "image_prompt": "The single surviving ship Victoria limping into a Spanish harbor, eighteen gaunt survivors on deck, crowds gathering in disbelief"},
+            {"text": "Мы первыми проплыли вокруг планеты. Восемнадцать человек доказали: Земля кругла — не словами, а килем корабля. Подпишись, если хочешь ещё.",
+             "image_prompt": "The Victoria's crew kneeling before the Spanish king, spices spilling from a chest, a globe of the Earth prominently displayed, royal court"},
+        ],
+    },
+    {
+        "era": "Древний Рим",
+        "title": "ЭТОТ ГОРОД ПОГИБ ЗА ОДИН ДЕНЬ… А ПОТОМ ПРОСПАЛ 1700 ЛЕТ 🌋",
+        "description": "79 год, Помпеи: обычное утро, рынок и бани — и Везувий, о котором никто ничего не знал.",
+        "scenes": [
+            {"text": "79 год, Помпеи. Обычное утро: рынок, бани, таверны. Никто не знает, что Везувий — не просто гора. Это бомба замедленного действия.",
+             "image_prompt": "Busy Roman market morning in Pompeii, vendors and citizens in togas, Mount Vesuvius looming peacefully in the background, daily life"},
+            {"text": "Полдень. Взрыв поднимает столб пепла на тридцать километров. Камни летят на город. Люди бросают всё и бегут к морю.",
+             "image_prompt": "Massive volcanic eruption column rising over Pompeii, pumice stones raining down, panicked crowds fleeing toward the harbor"},
+            {"text": "Пепел идёт всю ночь. Крыши рушатся под его тяжестью. А наутро приходит пирокластический поток — четыреста градусов и сто километров в час. Конец.",
+             "image_prompt": "Glowing pyroclastic flow surging down the mountainside toward the Roman city at dawn, apocalyptic orange sky, people running"},
+            {"text": "Город исчезает под шестью метрами пепла. Имя Помпеи стирается из памяти. Через века здесь строят новые деревни — не подозревая, ЧТО у них под ногами.",
+             "image_prompt": "Medieval farmers ploughing fields above buried Roman ruins, a broken column sticking out of the soil, unaware of the city below"},
+            {"text": "В 1748 году землекопы находят улицы, фрески и хлеб, оставленный в печах. Две тысячи человек застыли в пепле — и рассказали нам о Риме больше, чем все летописи. Подпишись.",
+             "image_prompt": "18th century excavators uncovering preserved Roman streets and frescoes in Pompeii, a baker's carbonized bread in an oven, torchlight discovery"},
+        ],
+    },
 ]
 
-FACTS = [
-    {"era": "Древний Китай", "fact": "В 132 году китайский астроном Чжан Хэн изобрёл первый в мире сейсмоскоп — бронзовый сосуд с восемью драконами, который определял направление землетрясения за сотни километров."},
-    {"era": "Древний Китай", "fact": "Терракотовую армию — более 8000 глиняных воинов императора Цинь Шихуанди — случайно нашли крестьяне в 1974 году, копая колодец."},
-    {"era": "Древний Китай", "fact": "Бумагу изобрёл придворный сановник Цай Лунь в 105 году, сделав её из древесной коры и тряпья."},
-    {"era": "Древний Египет", "fact": "Пирамиду Хеопса сложили из 2,3 миллиона каменных блоков примерно за 20 лет — это по 12 блоков в час, днём и ночью, без перерыва."},
-    {"era": "Древний Египет", "fact": "Фараон Рамсес II правил 66 лет, дожил до 90 лет и пережил почти всех своих сотню детей."},
-    {"era": "Древний Египет", "fact": "Тутанхамон стал фараоном в 9 лет, а умер в 19 — его нетронутую гробницу нашли только в 1922 году."},
-    {"era": "Древний Рим", "fact": "Пантеон в Риме стоит почти 1900 лет, и его бетонный купол диаметром 43 метра до сих пор самый большой в мире из неармированного бетона."},
-    {"era": "Древний Рим", "fact": "В 79 году за один день Везувий погреб Помпеи под 6-метровым слоем пепла."},
-    {"era": "Древний Рим", "fact": "Колизей вмещал 50 000 зрителей и мог опустеть за 10 минут — через 80 выходов по всему амфитеатру."},
-    {"era": "Древняя Греция", "fact": "В I веке н.э. греческий инженер Герон Александрийский создал эолипил — первую паровую машину, но считал её просто игрушкой."},
-    {"era": "Древняя Греция", "fact": "В 490 году до н.э. воин Фидиппид пробежал около 40 км от Марафона до Афин, сообщил о победе и упал замертво — так появился марафон."},
-    {"era": "Древняя Греция", "fact": "Антикитерский механизм, поднятый со дна моря в 1901 году, оказался астрономическим калькулятором, созданным за 100 лет до н.э."},
-    {"era": "Средневековье", "fact": "В 1518 году в Страсбурге началась танцевальная чума: одна женщина не могла перестать танцевать, и через месяц танцевали уже около 400 человек."},
-    {"era": "Средневековье", "fact": "Кёльнский собор строили 632 года — с 1248 по 1880 год."},
-    {"era": "Средневековье", "fact": "В 1348 году в Европу пришла «Чёрная смерть»: за пять лет чума унесла почти треть населения континента."},
-    {"era": "Викинги", "fact": "Около 1000 года викинг Лейф Эриксон доплыл до Северной Америки почти за 500 лет до Колумба — его поселение в Л'Анс-о-Медоуз нашли археологи."},
-    {"era": "Викинги", "fact": "В 865 году «Великая языческая армия» викингов высадилась в Англии и за десять лет захватила почти все англосаксонские королевства."},
-    {"era": "Древняя Русь", "fact": "Новгородский мальчик Онфим в XIII веке процарапывал на бересте буквы и рисунки — его «шпаргалки» сохранились до сих пор."},
-    {"era": "Древняя Русь", "fact": "В 1147 году Москва впервые упомянута в летописи: Юрий Долгорукий пригласил союзника «погостить в Москов»."},
-    {"era": "Российская империя", "fact": "В 1834 году отец и сын Черепановы построили первый в Российской империи паровоз, но железные дороги признали невыгодными — дешевле оказался труд крепостных."},
-    {"era": "Российская империя", "fact": "В 1730 году 19-летний Михайло Ломоносов тайно ушёл с рыбным обозом из северной деревни в Москву — и через несколько лет стал первым русским академиком."},
-    {"era": "Эпоха Наполеона", "fact": "Наполеон не был низким: около 169 см — нормальный рост для его эпохи. «Маленьким» его сделала британская пропаганда."},
-    {"era": "Эпоха Наполеона", "fact": "В 1812 году Великая армия Наполеона вошла в Россию числом около 600 000 солдат, а назад вернулось меньше 30 000."},
-    {"era": "Вторая мировая война", "fact": "В 1943 году математик Абрахам Вальд спас тысячи бомбардировщиков: он понял, что бронировать надо те места, где у вернувшихся самолётов пробоин НЕТ — туда попадали те, кто не вернулся."},
-    {"era": "Вторая мировая война", "fact": "Женщины 46-го гвардейского ночного бомбардировочного полка летали на фанерных самолётах У-2 только по ночам — немцы прозвали их «ночными ведьмами»."},
-    {"era": "Вторая мировая война", "fact": "Снайпер Василий Зайцев за пять месяцев Сталинградской битвы уничтожил 225 солдат и офицеров противника."},
-    {"era": "Эпоха Возрождения", "fact": "В 1493 году Леонардо да Винчи нарисовал «воздушный винт» — эскиз предка вертолёта. Сам аппарат так и не взлетел."},
-    {"era": "Эпоха Возрождения", "fact": "«Мона Лиза» несколько лет висела в спальне Наполеона во дворце Тюильри, прежде чем попасть в Лувр."},
-    {"era": "Византия", "fact": "Собор Святой Софии построили всего за 5 лет (532-537). Его купол диаметром 31 метр современники считали «созданным не людьми»."},
-    {"era": "Византия", "fact": "Греческий огонь — жидкость, горевшую даже на воде, — был строжайшей государственной тайной Византии. Рецепт утерян навсегда."},
-    {"era": "Ацтеки и майя", "fact": "Ацтеки платили какао-бобами: за 10 бобов можно было купить кролика, а за 100 — раба."},
-    {"era": "Ацтеки и майя", "fact": "В 1519 году ацтекская столица Теночтитлан с 200 000 жителями была больше любого европейского города того времени."},
-    {"era": "Ацтеки и майя", "fact": "Дрезденский кодекс майя содержит таблицы солнечных затмений, позволявшие предсказывать их на десятилетия вперёд — без телескопов."},
-    {"era": "Золотая Орда", "fact": "В 1382 году хан Тохтамыш взял Москву обманом: обещал мир, а когда горожане открыли ворота — штурмом разграбил город."},
-    {"era": "Золотая Орда", "fact": "В Монгольской империи работала почтовая служба «ям»: гонец проезжал до 300 км в сутки, меняя лошадей на станциях."},
-    {"era": "Эпоха великих географических открытий", "fact": "Из примерно 250 моряков Магеллана домой вернулись только 18 — но их плавание 1519-1522 годов впервые доказало, что Земля круглая."},
-    {"era": "Эпоха великих географических открытий", "fact": "Колумб до конца жизни был уверен, что открыл путь в Азию, и называл новые земли «Вест-Индией»."},
-]
-PROMPT_TMPL = """Ты — сценарист YouTube Shorts по истории. Вот РЕАЛЬНЫЙ проверенный исторический факт из эпохи «{era}»:
-
-«{fact}»
-
-Напиши захватывающий сценарий шортса СТРОГО на основе этого факта.
-Правила жёсткие:
-- Не выдумывай ничего сверх факта: никаких других событий, имён и цифр, которых нет в факте.
-- Все имена, даты и числа — точно как в факте.
-- Добавлять можно только атмосферу, эмоции и связки между сценами.
-
-Требования к сценарию:
-- Текст для озвучки на русском языке, 60-80 секунд при чтении (примерно 150-190 слов).
-- Первая фраза (hook) — не более 10 слов, без приветствий, ОТ ПЕРВОГО ЛИЦА: «Меня зовут...», «Я — единственный, кто...», «Мне сказали, что...».
-- ГЛАВНОЕ: веди рассказ ОТ ПЕРВОГО ЛИЦА — от лица героя факта. Зритель находится в голове героя: его страх, надежда, решения.
-- Рассказывай в настоящем времени, короткими предложениями (максимум 12 слов), просто, как для друга.
-- Тон — как у каналов-миллионников: живо, интригующе, зритель не может оторваться. Пример тона: «Представь: ты солдат, и твой самолёт дырявят со всех сторон. Куда ставить броню? Ошибёшься — погибнешь.»
-- Обязательна конкретика: имена, цифры, даты, места. Цифры в начале фраз захватывают внимание.
-- 4-5 смысловых битов, каждый — отдельная сцена, с нарастающим напряжением от сцены к сцене.
-- Финал — мощный вывод или неожиданный поворот, который хочется пересказать другу.
-- Никаких выдумок: только реальные факты. Если не уверен в точности — выбери другой факт.
-- Запрещены штампы: «интересно, что», «в истории было», «как известно», «давайте узнаем».
-
-Требования к title:
-- Вирусный стиль: часть слов КАПСОМ, многоточие для интриги, один эмодзи в конце. Примеры: «Я ЕДИНСТВЕННЫЙ ЗРЯЧИЙ в городе слепых… и монстр это ПОНЯЛ 👁️», «МЕНЯ ПРЕДАЛ лучший друг… но я всё ЗНАЛ 😱», «В ЭТОМ ГОРОДЕ НЕЛЬЗЯ ИЗДАВАТЬ НИ ЗВУКА… ИНАЧЕ ОНИ ПРИДУТ 🔇»
-- От первого лица или про героя, 60-90 символов, интрига + конкретика (цифра или имя), без обмана зрителя.
-
-Требования к image_prompt (на английском):
-- Опиши конкретную драматичную сцену: кто, что делает, где, эмоции, детали эпохи.
-- Главный объект в центре кадра, вертикальная композиция.
-
-Верни СТРОГО валидный JSON без markdown в формате:
-{{
-  "title": "...",
-  "hook": "...",
-  "scenes": [
-    {{"text": "текст озвучки этой сцены", "image_prompt": "описание сцены на английском в стиле vintage historical illustration, engraving, ink and watercolor"}}
-  ],
-  "description": "описание видео для YouTube, 2-3 предложения на русском",
-  "tags": ["#shorts", "история", "ещё 3-5 тегов"]
-}}"""
-
-
-def _extract_json(text: str) -> dict:
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        raise ValueError(f"JSON не найден в ответе модели: {text[:200]}")
-    data = json.loads(match.group(0))
-    if isinstance(data, str):
-        data = json.loads(data)
-    if not isinstance(data, dict):
-        raise ValueError(f"неожиданный тип ответа: {type(data).__name__}")
-    return data
-
-
-def _ask_gemini(prompt: str) -> str:
-    key = os.environ["GEMINI_API_KEY"]
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-    url = ("https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{model}:generateContent?key={key}")
-    body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 8192},
-    }).encode()
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.loads(resp.read())
-    return data["candidates"][0]["content"]["parts"][0]["text"]
-
-
-def _ask_mistral(prompt: str, api_key: str) -> str:
-    req = urllib.request.Request(
-        "https://api.mistral.ai/v1/chat/completions",
-        data=json.dumps({
-            "model": os.environ.get("MISTRAL_MODEL", "mistral-small-latest"),
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.9,
-            "max_tokens": 4096,
-        }).encode(),
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.loads(resp.read())
-    return data["choices"][0]["message"]["content"]
-
-
-def _ask_pollinations(prompt: str) -> str:
-    token = os.environ.get("POLLINATIONS_TOKEN")
-    model = os.environ.get("SHORTS_TEXT_MODEL", "openai" if token else "openai-fast")
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "seed": random.randint(0, 10**9),
-        "max_tokens": 16000 if token else 3000,
-        "reasoning_effort": "low",
-    }).encode()
-    headers = {"Content-Type": "application/json", "User-Agent": "shorts-factory/1.0"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    last_err = None
-    for _ in range(8):
-        req = urllib.request.Request(POLLINATIONS_TEXT, data=body, headers=headers)
-        try:
-            with urllib.request.urlopen(req, timeout=300) as resp:
-                data = json.loads(resp.read())
-            return data["choices"][0]["message"]["content"]
-        except urllib.error.HTTPError as err:
-            last_err = err
-            if err.code in (402, 429):
-                retry_after = (err.headers or {}).get("Retry-After", "")
-                delay = int(retry_after) + 3 if retry_after.isdigit() else 48
-                time.sleep(delay)
-            else:
-                time.sleep(8)
-        except Exception as err:  # noqa: BLE001
-            last_err = err
-            time.sleep(8)
-    raise last_err
-
-
-def _ask_llm(prompt: str) -> str:
-    if os.environ.get("GEMINI_API_KEY"):
-        return _ask_gemini(prompt)
-    if os.environ.get("MISTRAL_API_KEY"):
-        return _ask_mistral(prompt, os.environ["MISTRAL_API_KEY"])
-    return _ask_pollinations(prompt)
-
-
-STOPWORDS = frozenset(
-    """
-    и в не на я быть он с что а по это как но его к у же вы за бы из её о да
-    только мне было вот от меня ещё нет ему теперь когда даже ну вдруг ли если
-    уже или ни до там потом себя ничего может тут где есть надо для мы их чем
-    была сам без раз тоже себе под будет тогда кто потому этого какой совсем
-    здесь один почти мой тем чтобы сейчас были куда зачем всех можно при об
-    хорошо свою этой перед иногда лучше чуть том нельзя такой им более всегда
-    конечно всю между этот эта они то так ведь очень весь вся все свой свои над
-    через после про них нас вас тебя ей твой наш ваш который которые которая
-    которое оно она ты хотя поэтому просто вместе сегодня вчера никогда давно
-    год года годы лет время куда откуда почему зачем
-    """.split()
-)
-
-
-def _words(text: str) -> list[str]:
-    return re.findall(r"[а-яёa-z]+", text.lower())
-
-
-def _score(script: dict) -> float:
-    """0..1: связность (доля служебных слов), конкретика, КАПС-title, длина."""
-    texts = [sc.get("text", "") if isinstance(sc, dict) else str(sc)
-             for sc in script.get("scenes", [])]
-    if not texts:
-        return 0.0
-    words = _words(" ".join(texts))
-    if len(words) < 80:
-        return 0.0
-    stop_ratio = sum(w in STOPWORDS for w in words) / len(words)
-    fluency = min(stop_ratio / 0.32, 1.0)
-    concrete = sum(1 for t in texts if re.search(r"\d", t)) / len(texts)
-    title = str(script.get("title") or "")
-    caps = 1.0 if title and title == title.upper() and len(title) <= 90 else 0.0
-    length_fit = 1.0 if 130 <= len(words) <= 200 else 0.5
-    return 0.4 * fluency + 0.25 * concrete + 0.15 * caps + 0.2 * length_fit
-
-
-def _normalize(script: dict) -> dict:
-    topic = str(script.get("topic") or script.get("title") or "historical scene")
-    scenes = []
-    for sc in script.get("scenes", []):
-        if isinstance(sc, str):
-            sc = {"text": sc, "image_prompt": ""}
-        if isinstance(sc, dict):
-            sc = dict(sc)
-            for key in ("text", "image_prompt"):
-                if not isinstance(sc.get(key), str):
-                    sc[key] = str(sc.get(key) or "")
-            if not sc["image_prompt"].strip():
-                base = sc["text"].strip() or topic
-                sc["image_prompt"] = " ".join(base.split()[:12]) or topic
-            scenes.append(sc)
-    script["scenes"] = scenes
-    if not isinstance(script.get("hook"), str):
-        first = scenes[0]["text"] if scenes else ""
-        script["hook"] = first
-    for key in ("title", "hook", "description"):
-        if isinstance(script.get(key), str):
-            script[key] = script[key].replace("\u202f", " ").replace("\u00a0", " ").strip()
-    for sc in script.get("scenes", []):
-        for key in ("text", "image_prompt"):
-            if isinstance(sc.get(key), str):
-                sc[key] = sc[key].replace("\u202f", " ").replace("\u00a0", " ").strip()
-    return script
-
-
-EDIT_TMPL = """Вот сценарий YouTube Shorts на русском в формате JSON:
-{json}
-
-Исходный реальный факт, на котором он основан:
-«{fact}»
-
-Отредактируй сценарий:
-- Исправь ВСЕ грамматические ошибки и бессмысленные или искажённые слова — текст должен звучать как грамотная живая русская речь.
-- Стиль: простой рассказ для друга, настоящее время, короткие предложения, интрига с первых слов, рассказ ОТ ПЕРВОГО ЛИЦА.
-- Сохрани факты ТОЧНО: имена, даты и цифры не менять и ничего нового не добавлять.
-- Верни ТОЛЬКО исправленный JSON в том же формате, без markdown и пояснений."""
-
-
-def _edit_pass(script: dict, fact: str) -> dict:
-    try:
-        raw = _ask_llm(EDIT_TMPL.format(json=json.dumps(script, ensure_ascii=False), fact=fact))
-        edited = _normalize(_extract_json(raw))
-        if edited.get("scenes") and edited.get("hook"):
-            edited["era"] = script.get("era")
-            return edited
-    except Exception:  # noqa: BLE001
-        pass
-    return script
-
-
-TITLE_TMPL = """Вот заголовок YouTube Shorts на русском: \"{title}\"
-О чём видео: {context}
-Если в заголовке есть бессмысленные, выдуманные или искажённые слова — замени их на правильные.
-Верни ОДНУ строку: вирусный заголовок (часть слов КАПСОМ, многоточие, один эмодзи в конце), 60-90 символов, в стиле «Я ЕДИНСТВЕННЫЙ ЗРЯЧИЙ в городе слепых… и монстр это ПОНЯЛ 👁️». Без пояснений и кавычек."""
-
-
-def _fix_title(script: dict) -> dict:
-    scenes = script.get("scenes") or []
-    first = str(scenes[0].get("text", "")) if scenes and isinstance(scenes[0], dict) else ""
-    prompt = TITLE_TMPL.format(title=str(script.get("title", "")), context=first[:300])
-    try:
-        fixed = _ask_llm(prompt).strip().strip('"')
-        fixed = fixed.splitlines()[0].strip()
-    except Exception:  # noqa: BLE001
-        return script
-    if 15 <= len(fixed) <= 95 and re.search(r"[А-ЯЁ]", fixed) and re.search(r"[а-яё\w]", fixed.lower()):
-        script["title"] = fixed
-    return script
+ERAS = sorted({s["era"] for s in SCRIPTS})
 
 
 def generate_script(era: str | None = None) -> dict:
-    pool = [f for f in FACTS if f["era"] == era] if era else FACTS
-    chosen = random.choice(pool or FACTS)
-    era, fact = chosen["era"], chosen["fact"]
-    prompt = PROMPT_TMPL.format(era=era, fact=fact)
-    best: dict | None = None
-    best_score = 0.0
-    last_valid: dict | None = None
-    last_err = None
-    started = time.time()
-    for _ in range(5):
-        try:
-            script = _normalize(_extract_json(_ask_llm(prompt)))
-            if script.get("scenes") and script.get("hook"):
-                script["era"] = era
-                last_valid = script
-                score = _score(script)
-                if score > best_score:
-                    best, best_score = script, score
-                if best_score >= 0.75:
-                    break
-        except Exception as err:  # noqa: BLE001
-            last_err = err
-        if time.time() - started > 900:
-            break
-    if best is None:
-        best, best_score = last_valid, 0.0
-    if best is None:
-        raise RuntimeError(f"Не удалось получить сценарий: {last_err}")
-    print(f"      качество сценария: {best_score:.0%}")
-    best = _edit_pass(best, fact)
-    best = _fix_title(best)
-    print(f"      финальный title: {best.get('title', '')}")
-    return best
-
-
-if __name__ == "__main__":
-    import pprint
-    pprint.pprint(generate_script())
+    pool = [s for s in SCRIPTS if s["era"] == era] if era else SCRIPTS
+    script = copy.deepcopy(random.choice(pool or SCRIPTS))
+    script.setdefault("tags", ["#shorts", "#история", "#факты", "#знания", script["era"].lower()])
+    return script
