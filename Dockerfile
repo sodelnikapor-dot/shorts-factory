@@ -8,6 +8,7 @@ moviepy>=2.0
 pillow>=10.0
 numpy
 requests
+opencv-python-headless>=4.9
 EOF
 COPY <<'EOF' /app/shorts_factory/__init__.py
 EOF
