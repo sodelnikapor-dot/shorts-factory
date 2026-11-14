@@ -3,6 +3,11 @@ name: shorts-factory
 on:
   schedule:
     - cron: "0 3,7,10,14,18 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "patches/**"
+      - ".github/workflows/shorts.yml"
   workflow_dispatch:
     inputs:
       era:
@@ -12,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: shorts
