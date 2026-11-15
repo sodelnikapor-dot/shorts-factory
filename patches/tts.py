@@ -54,6 +54,48 @@ async def _tts_one(text: str, mp3_path: str, voice: str, rate: str, pitch: str) 
     return words
 
 
+def _split_sentence(s: str) -> list[str] | None:
+    """Делит упрямую фразу на две части: по знакам препинания, иначе пополам по словам."""
+    parts = [p.strip() for p in re.split(r"(?<=[,;:—])\s+", s) if p.strip()]
+    if len(parts) > 1:
+        half = len(parts) // 2
+        return [" ".join(parts[:half]), " ".join(parts[half:])]
+    words = s.split()
+    if len(words) < 2:
+        return None
+    mid = len(words) // 2
+    return [" ".join(words[:mid]), " ".join(words[mid:])]
+
+
+def _tts_sentence(sentence: str, base_path: str, rate: str, pitch: str,
+                  gap: float, depth: int = 0) -> list[tuple[str, float, list, float]]:
+    """Озвучивает одну фразу; если сервис отдаёт пустой звук — дробит её на части.
+    Возвращает список (path, duration, words, gap_after)."""
+    last_err = None
+    for attempt in range(4):
+        voice = VOICE if attempt < 2 else FALLBACK_VOICES[attempt % 2]
+        tmp = base_path + f".a{attempt}.mp3"
+        try:
+            words = asyncio.run(_tts_one(sentence, tmp, voice, rate, pitch))
+            dur = AudioFileClip(tmp).duration
+            if dur <= 0.05:
+                raise RuntimeError("пустой звук от сервиса")
+            return [(tmp, dur, words, gap)]
+        except Exception as err:  # noqa: BLE001
+            last_err = err
+            time.sleep(4 * (attempt + 1))
+    if depth < 2:
+        halves = _split_sentence(sentence)
+        if halves:
+            print(f"[tts] фраза не озвучилась ({last_err}); дроблю на {len(halves)} части", flush=True)
+            out = []
+            for k, half in enumerate(halves):
+                out.extend(_tts_sentence(half, f"{base_path}.s{k}", rate, pitch,
+                                         0.15 if k == 0 else gap, depth + 1))
+            return out
+    raise RuntimeError(f"Озвучка не удалась: {last_err}")
+
+
 def synthesize(text: str, mp3_path: str) -> list[dict]:
     """Озвучивает text живой подачей, пишет mp3, возвращает пословные тайминги (сек)."""
     sentences = [s.strip() for s in re.split(r"(?<=[.!?…])\s+", text.strip()) if s.strip()]
@@ -61,22 +103,9 @@ def synthesize(text: str, mp3_path: str) -> list[dict]:
         sentences = [text.strip()]
     plan = _plan_delivery(sentences)
 
-    pieces = []
-    for (rate, pitch, _gap), sentence in zip(plan, sentences):
-        tmp = mp3_path + f".part{len(pieces)}.mp3"
-        last_err = None
-        for attempt in range(4):
-            voice = VOICE if attempt < 2 else FALLBACK_VOICES[attempt % 2]
-            try:
-                words = asyncio.run(_tts_one(sentence, tmp, voice, rate, pitch))
-                dur = AudioFileClip(tmp).duration
-                pieces.append((tmp, dur, words))
-                break
-            except Exception as err:  # noqa: BLE001
-                last_err = err
-                time.sleep(4 * (attempt + 1))
-        else:
-            raise RuntimeError(f"Озвучка не удалась: {last_err}")
+    pieces = []  # (path, dur, words, gap_after)
+    for (rate, pitch, gap), sentence in zip(plan, sentences):
+        pieces.extend(_tts_sentence(sentence, mp3_path + f".part{len(pieces)}", rate, pitch, gap))
 
     clips = [AudioFileClip(p) for p, _d, _w in pieces]
     final = concatenate_audioclips(clips)
@@ -87,7 +116,7 @@ def synthesize(text: str, mp3_path: str) -> list[dict]:
 
     timings = []
     cursor = 0.0
-    for idx, ((path, dur, words), (_rate, _pitch, gap)) in enumerate(zip(pieces, plan)):
+    for path, dur, words, gap in pieces:
         for j, w in enumerate(words):
             timings.append({
                 "word": w["word"],
