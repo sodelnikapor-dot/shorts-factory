@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -r
 WORKDIR /app
 COPY <<'EOF' /app/requirements.txt
 edge-tts>=7.0
+gTTS>=2.5
 moviepy>=2.0
 pillow>=10.0
 numpy

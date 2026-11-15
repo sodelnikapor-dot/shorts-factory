@@ -15,6 +15,31 @@ VOICE = os.environ.get("SHORTS_VOICE", "ru-RU-DmitryNeural")
 FALLBACK_VOICES = ["ru-RU-SvetlanaNeural", "ru-RU-DmitryNeural"]
 
 
+class _EdgeDown(RuntimeError):
+    """edge-tts недоступен целиком (блокировки/пустой звук) — нужен резервный движок."""
+
+
+def _gtts_one(text: str, mp3_path: str) -> None:
+    from gtts import gTTS
+    gTTS(text, lang="ru").save(mp3_path)
+
+
+def _estimate_words(text: str, dur: float) -> list[dict]:
+    """Резервный движок не отдаёт тайминги — распределяем слова по длине фразы."""
+    words = [w for w in text.split() if re.search(r"[\w\u0400-\u04FF]", w)]
+    if not words:
+        return []
+    weights = [len(w) + 1.5 for w in words]
+    total = sum(weights)
+    out, cursor = [], 0.0
+    for i, (w, wt) in enumerate(zip(words, weights)):
+        d = dur * wt / total
+        out.append({"word": w, "start": cursor, "duration": d,
+                    "break_after": i == len(words) - 1})
+        cursor += d
+    return out
+
+
 def _plan_delivery(sentences: list[str]) -> list[tuple[str, str, float]]:
     """Для каждой фразы: (rate, pitch, пауза после неё)."""
     plan = []
@@ -88,12 +113,16 @@ def _tts_sentence(sentence: str, base_path: str, rate: str, pitch: str,
         halves = _split_sentence(sentence)
         if halves:
             print(f"[tts] фраза не озвучилась ({last_err}); дроблю на {len(halves)} части", flush=True)
-            out = []
-            for k, half in enumerate(halves):
-                out.extend(_tts_sentence(half, f"{base_path}.s{k}", rate, pitch,
-                                         0.15 if k == 0 else gap, depth + 1))
-            return out
-    raise RuntimeError(f"Озвучка не удалась: {last_err}")
+            try:
+                out = []
+                for k, half in enumerate(halves):
+                    out.extend(_tts_sentence(half, f"{base_path}.s{k}", rate, pitch,
+                                             0.15 if k == 0 else gap, depth + 1))
+                return out
+            except RuntimeError as err:
+                if isinstance(err, _EdgeDown):
+                    raise
+    raise _EdgeDown(str(last_err))
 
 
 def synthesize(text: str, mp3_path: str) -> list[dict]:
@@ -104,8 +133,26 @@ def synthesize(text: str, mp3_path: str) -> list[dict]:
     plan = _plan_delivery(sentences)
 
     pieces = []  # (path, dur, words, gap_after)
+    edge_ok = True
     for (rate, pitch, gap), sentence in zip(plan, sentences):
-        pieces.extend(_tts_sentence(sentence, mp3_path + f".part{len(pieces)}", rate, pitch, gap))
+        if edge_ok:
+            try:
+                pieces.extend(_tts_sentence(sentence, mp3_path + f".part{len(pieces)}", rate, pitch, gap))
+                continue
+            except _EdgeDown as err:
+                edge_ok = False
+                print(f"[tts] edge-tts недоступен ({err}); сцена — резервным движком gTTS", flush=True)
+        tmp = mp3_path + f".part{len(pieces)}.mp3"
+        for attempt in range(3):
+            try:
+                _gtts_one(sentence, tmp)
+                dur = AudioFileClip(tmp).duration
+                break
+            except Exception as err:  # noqa: BLE001
+                if attempt == 2:
+                    raise
+                time.sleep(5 * (attempt + 1))
+        pieces.append((tmp, dur, _estimate_words(sentence, dur), gap))
 
     clips = [AudioFileClip(p) for p, _d, _w in pieces]
     final = concatenate_audioclips(clips)
