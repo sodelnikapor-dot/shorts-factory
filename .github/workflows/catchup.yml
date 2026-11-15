@@ -9,6 +9,7 @@ on:
   schedule:
     - cron: "40 14 15 11 *"
     - cron: "40 15 15 11 *"
+    - cron: "20 17 15 11 *"
 
 permissions:
   contents: read
@@ -35,7 +36,7 @@ jobs:
           mkdir -p output
           # Слот 5 или 6 — внеочередные сценарии, не пересекаются с
           # плановыми слотами 0-4 ротации этого дня.
-          SLOT=${{ github.event.schedule == '40 14 15 11 *' && 5 || 6 }}
+          SLOT=${{ github.event.schedule == '40 14 15 11 *' && 5 || (github.event.schedule == '20 17 15 11 *' && 5 || 6) }}
           docker run --rm -v "$PWD/output:/app/output" \
             -v "$PWD/patches/script_gen.py:/app/shorts_factory/script_gen.py" \
             -v "$PWD/patches/images.py:/app/shorts_factory/images.py" \
