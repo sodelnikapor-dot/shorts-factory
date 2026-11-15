@@ -154,7 +154,7 @@ def synthesize(text: str, mp3_path: str) -> list[dict]:
                 time.sleep(5 * (attempt + 1))
         pieces.append((tmp, dur, _estimate_words(sentence, dur), gap))
 
-    clips = [AudioFileClip(p) for p, _d, _w in pieces]
+    clips = [AudioFileClip(p) for p, _d, _w, _g in pieces]
     final = concatenate_audioclips(clips)
     final.write_audiofile(mp3_path, logger=None)
     for c in clips:
