@@ -1,14 +1,14 @@
 name: shorts-catchup
 
-# ВРЕМЕННЫЙ workflow: два внеочередных выпуска после сброса дневного
-# лимита загрузок YouTube (сбрасывается ночью по тихоокеанскому времени,
-# ~08:00 UTC = 11:00 МСК). Кроны сработают только 15 ноября 2026.
-# После выпуска пары этот файл нужно удалить.
+# ВРЕМЕННЫЙ workflow: два внеочередных выпуска после сброса дневного лимита
+# загрузок YouTube (~08:00 UTC = 11:00 МСК). Первые попытки 15 Nov в 08:20/09:20 UTC
+# упали на сбое edge-tts ("No audio was received"), перезапланированы ниже.
+# Кроны сработают только 15 ноября 2026. После выпуска пары этот файл нужно удалить.
 
 on:
   schedule:
-    - cron: "20 8 15 11 *"
-    - cron: "20 9 15 11 *"
+    - cron: "30 12 15 11 *"
+    - cron: "30 13 15 11 *"
 
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
           mkdir -p output
           # Слот 5 или 6 — внеочередные сценарии, не пересекаются с
           # плановыми слотами 0-4 ротации этого дня.
-          SLOT=${{ github.event.schedule == '20 8 15 11 *' && 5 || 6 }}
+          SLOT=${{ github.event.schedule == '30 12 15 11 *' && 5 || 6 }}
           docker run --rm -v "$PWD/output:/app/output" \
             -v "$PWD/patches/script_gen.py:/app/shorts_factory/script_gen.py" \
             -v "$PWD/patches/images.py:/app/shorts_factory/images.py" \
