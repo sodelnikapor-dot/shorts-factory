@@ -370,7 +370,9 @@ def generate_script(era: str | None = None) -> dict:
     slot = os.environ.get("SHORTS_SLOT")
     if slot is not None and not era:
         day = int(time.strftime("%Y%m%d"))
-        script = copy.deepcopy(SCRIPTS[(day * 5 + int(slot)) % len(SCRIPTS)])
+        # Шаг 7 (взаимно простой с 15) — соседние дни не пересекаются по сюжетам,
+        # даже со слотами 5-6: полный цикл банка сценариев — 15 дней.
+        script = copy.deepcopy(SCRIPTS[(day * 7 + int(slot)) % len(SCRIPTS)])
     else:
         script = copy.deepcopy(random.choice(pool or SCRIPTS))
     script.setdefault("tags", [
